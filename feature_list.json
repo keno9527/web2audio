@@ -1,0 +1,52 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "中文项目基线与验证入口",
+      "description": "将仓库协作说明、状态记录、交接记录和启动验证具体化为 web2audio 当前阶段可执行的中文 harness。",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "2026-06-27 08:41 CST 运行 ./init.sh 通过：必需文件均存在且非空，6 个功能条目结构合法，未发现已知模板文本残留；harness 结构校验通过，评分 100/100。"
+    },
+    {
+      "id": "feat-002",
+      "name": "Chrome 插件文章提交入口",
+      "description": "在 Chrome 当前网页提取标题、来源 URL 和正文，提交到服务端生成文章任务，并在插件内展示提交结果与生成状态。",
+      "dependencies": ["feat-001"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-003",
+      "name": "文章清洗与 TTS 任务链路",
+      "description": "对插件提交的文章做正文清洗、去重、语言识别和段落切分，并驱动 TTS 任务从 queued 或 processing 流转到 ready 或 failed。",
+      "dependencies": ["feat-002"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-004",
+      "name": "播放器资源融合与今日待读队列",
+      "description": "文章音频 ready 后创建可播放资源，关联 love-song 的 track 和 audio asset，并自动进入默认播放列表「今日待读」。",
+      "dependencies": ["feat-003"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-005",
+      "name": "iOS 文章频道与车载连续播放",
+      "description": "在 iOS 播放器展示文章频道、生成状态、播放进度和重试入口，并复用现有播放、系统媒体控制和播放历史能力。",
+      "dependencies": ["feat-004"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-006",
+      "name": "端到端验收与风险收敛",
+      "description": "稳定复现从 Chrome 提交文章到 iOS 播放 ready 音频的闭环，并记录失败重试、正文提取、TTS 成本和存储策略风险。",
+      "dependencies": ["feat-005"],
+      "status": "not-started",
+      "evidence": ""
+    }
+  ]
+}
