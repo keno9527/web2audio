@@ -1,0 +1,74 @@
+docs/PRODUCT.md
+  h_84260fe907a787 44,90,107,145 gitai:{"mixed_line_ranges":[{"Single":44},{"Single":107}],"operations":[]}
+  s_200e0fa9098a36::t_b910fa61e35099 106
+  s_b8d447e6106111::t_36a2ff0419e29e 1
+  s_dc84a58ba2a1fd::t_b681af7dbd949b 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f55c2567a4ebb4bb0f2fe3dd4a2cbb46b8ea7004",
+  "prompts": {},
+  "humans": {
+    "h_84260fe907a787": {
+      "author": "keno9527 <liuhaohust@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_200e0fa9098a36": {
+      "agent_id": {
+        "tool": "trae-cue",
+        "id": "ai_tab-icr-f091bb6a-a7b2-4e1d-ae8b-e7b41b192fd5",
+        "model": "default"
+      },
+      "human_author": "keno9527 <liuhaohust@gmail.com>"
+    },
+    "s_b8d447e6106111": {
+      "agent_id": {
+        "tool": "trae-cue",
+        "id": "ai_tab-icr-449bfd24-988e-4482-89b9-6917e8e4c8b3",
+        "model": "default"
+      },
+      "human_author": "keno9527 <liuhaohust@gmail.com>"
+    },
+    "s_dc84a58ba2a1fd": {
+      "agent_id": {
+        "tool": "trae-cue",
+        "id": "ai_tab-icr-f7625e8e-0ae4-4438-9d02-7bba14f44e72",
+        "model": "default"
+      },
+      "human_author": "keno9527 <liuhaohust@gmail.com>"
+    }
+  },
+  "attestation_metadata": {
+    "docs/PRODUCT.md": [
+      {
+        "hash": "h_84260fe907a787",
+        "line_ranges": [
+          {
+            "Single": 44
+          },
+          {
+            "Single": 90
+          },
+          {
+            "Single": 107
+          },
+          {
+            "Single": 145
+          }
+        ],
+        "mixed_line_ranges": [
+          {
+            "Single": 44
+          },
+          {
+            "Single": 107
+          }
+        ],
+        "operations": []
+      }
+    ]
+  },
+  "remote_transcripts": {}
+}
