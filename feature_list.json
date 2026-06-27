@@ -6,47 +6,109 @@
       "description": "将仓库协作说明、状态记录、交接记录和启动验证具体化为 web2audio 当前阶段可执行的中文 harness。",
       "dependencies": [],
       "status": "done",
-      "evidence": "2026-06-27 08:41 CST 运行 ./init.sh 通过：必需文件均存在且非空，6 个功能条目结构合法，未发现已知模板文本残留；harness 结构校验通过，评分 100/100。"
+      "evidence": "2026-06-27 08:41 CST 运行 ./init.sh 通过：必需文件均存在且非空，6 个功能条目结构合法，未发现已知模板文本残留；harness 结构校验通过，评分 100/100。2026-06-27 11:01 CST 更新 AGENTS.md：补齐技术方案和交接文档启动阅读范围，区分 harness 文档维护与产品功能推进，明确 fake 自测不等于真实 love-song/iOS 验收；./init.sh 和 harness validator 均通过。",
+      "workstream": "foundation",
+      "parallel_group": "completed",
+      "parallel_notes": "已完成，是后续所有任务的共同基线。"
     },
     {
       "id": "feat-002",
       "name": "Chrome 插件文章提交入口",
       "description": "在 Chrome 当前网页提取标题、来源 URL 和正文，提交到服务端生成文章任务，并在插件内展示提交结果与生成状态。",
       "dependencies": ["feat-001"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "2026-06-27 10:02 CST 在 codex/feat-002-submit-entry 分支完成第一版 FastAPI 文章任务 API 与 Chrome Manifest V3 插件提交入口；运行 ./init.sh 通过，包含后端 6 个 pytest 用例和插件 2 个 node:test 用例；git diff --check 通过。",
+      "workstream": "web2audio-extension-and-api",
+      "parallel_group": "completed",
+      "parallel_notes": "已完成，解锁正文处理链路和跨工程契约收敛。"
     },
     {
       "id": "feat-003",
-      "name": "文章清洗与 TTS 任务链路",
-      "description": "对插件提交的文章做正文清洗、去重、语言识别和段落切分，并驱动 TTS 任务从 queued 或 processing 流转到 ready 或 failed。",
+      "name": "文章正文清洗与分段基础链路",
+      "description": "对插件提交的正文做清洗、长度校验、语言识别和段落切分，写入文章正文状态与 TTS 分段数据，让文章从 text queued 或 processing 流转到 text ready 或 failed。",
       "dependencies": ["feat-002"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "2026-06-27 10:43 CST 完成正文清洗、语言识别、TTS 分段表模型和文章正文处理 service；先运行新增测试确认 RED，再实现后运行 backend/tests 9 个 pytest 用例通过，插件 2 个 node:test 用例通过，./init.sh 与 git diff --check 通过。",
+      "workstream": "web2audio-backend",
+      "parallel_group": "wave-1-after-feat-002",
+      "parallel_notes": "可与 feat-005 并行；它只依赖已完成的文章提交入口，不依赖 love-song。"
     },
     {
       "id": "feat-004",
-      "name": "播放器资源融合与今日待读队列",
-      "description": "文章音频 ready 后创建可播放资源，关联 love-song 的 track 和 audio asset，并自动进入默认播放列表「今日待读」。",
+      "name": "豆包 lite TTS 与火山云 TOS 音频产物",
+      "description": "基于已清洗分段调用豆包 lite 生成分段音频，合成最终文章音频并上传火山云 TOS，回写 audio_storage_key、duration_seconds 和 audio_status。",
       "dependencies": ["feat-003"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "2026-06-27 10:50 CST 完成 fake 豆包 lite TTS client、fake 火山云 TOS storage 和 audio job；先运行新增测试确认 RED，再实现后运行 backend/tests 11 个 pytest 用例通过，插件 2 个 node:test 用例通过。",
+      "workstream": "web2audio-backend",
+      "parallel_group": "wave-2-after-text-ready",
+      "parallel_notes": "可与 feat-006、feat-007 并行；它产出 web2audio 侧最终音频，不要求 love-song API 已实现。"
     },
     {
       "id": "feat-005",
-      "name": "iOS 文章频道与车载连续播放",
-      "description": "在 iOS 播放器展示文章频道、生成状态、播放进度和重试入口，并复用现有播放、系统媒体控制和播放历史能力。",
-      "dependencies": ["feat-004"],
-      "status": "not-started",
-      "evidence": ""
+      "name": "love-song 文章音频集成契约冻结",
+      "description": "冻结 web2audio 调用 love-song 的资源登记、固定 playlist_id、content_type=article_audio、subtitle 和幂等语义，并在 web2audio 侧准备 fake love-song client 契约测试边界。",
+      "dependencies": ["feat-002"],
+      "status": "done",
+      "evidence": "2026-06-27 10:52 CST 完成 love-song TOS 资源登记与歌单追加契约对象、fake love-song client 和幂等测试；先运行新增测试确认 RED，再实现后运行 backend/tests 13 个 pytest 用例通过。",
+      "workstream": "cross-project-contract",
+      "parallel_group": "wave-1-after-feat-002",
+      "parallel_notes": "可与 feat-003 并行；完成后解锁 love-song 后端、iOS 展示语义和 web2audio 同步 worker 的并行开发。"
     },
     {
       "id": "feat-006",
-      "name": "端到端验收与风险收敛",
-      "description": "稳定复现从 Chrome 提交文章到 iOS 播放 ready 音频的闭环，并记录失败重试、正文提取、TTS 成本和存储策略风险。",
+      "name": "love-song TOS 资源登记 API",
+      "description": "在 love-song 侧实现幂等的 POST /api/assets/tos，使用 external_source + external_id 创建或复用 track 与 audio asset，并返回稳定业务 ID。",
       "dependencies": ["feat-005"],
       "status": "not-started",
-      "evidence": ""
+      "evidence": "",
+      "workstream": "love-song-backend",
+      "parallel_group": "wave-2-after-contract",
+      "parallel_notes": "可与 feat-004、feat-007 并行；只依赖跨工程契约冻结，不阻塞 web2audio 先用 fake client 开发。"
+    },
+    {
+      "id": "feat-007",
+      "name": "love-song iOS 文章音频展示语义",
+      "description": "让 love-song API/iOS 识别 content_type=article_audio 和 subtitle，在「今日待读」与播放页展示文章标题、来源站点等语义，避免未知艺术家、首歌等音乐化文案。",
+      "dependencies": ["feat-005"],
+      "status": "not-started",
+      "evidence": "",
+      "workstream": "love-song-ios",
+      "parallel_group": "wave-2-after-contract",
+      "parallel_notes": "可与 feat-004、feat-006 并行；只需要稳定 DTO 语义，不要求 web2audio TTS 已完成。"
+    },
+    {
+      "id": "feat-008",
+      "name": "web2audio 播放器同步 worker",
+      "description": "在文章音频 ready 后调用 love-song 资源登记和固定「今日待读」歌单追加接口，处理幂等命中、重复追加和失败状态，回写 player_sync_status 与 love-song 业务 ID。",
+      "dependencies": ["feat-004", "feat-005"],
+      "status": "done",
+      "evidence": "2026-06-27 10:54 CST 完成 web2audio 播放器同步 worker，支持 fake love-song 资源登记、固定歌单追加、重复同步幂等和 audio not ready 失败；先运行新增测试确认 RED，再实现后运行 backend/tests 15 个 pytest 用例通过。",
+      "workstream": "web2audio-backend",
+      "parallel_group": "wave-3-after-audio-ready-and-contract",
+      "parallel_notes": "可先基于 feat-005 的 fake love-song client 开发；与 feat-006 的真实 love-song API 最终联调在 feat-010 收敛。"
+    },
+    {
+      "id": "feat-009",
+      "name": "本仓库 fake 全链路自测",
+      "description": "使用 fake TTS、fake TOS 和 fake love-song client，在本仓库内稳定自测 Chrome/API 提交后的文章任务从正文处理、音频生成、播放器同步到 playable 状态的完整链路。",
+      "dependencies": ["feat-008"],
+      "status": "done",
+      "evidence": "2026-06-27 10:56 CST 完成本仓库 fake 全链路自测入口，覆盖 API 提交文章、正文清洗分段、fake TTS/TOS 音频产物、fake love-song 资源登记与固定歌单追加，最终 GET /api/articles/{article_id} 返回 playable；./init.sh 通过，包含后端 16 个 pytest 用例和插件 2 个 node:test 用例。",
+      "workstream": "self-test",
+      "parallel_group": "local-e2e",
+      "parallel_notes": "这是本仓库可自动化的 fake 全链路自测，不代表真实 love-song 后端和 iOS 已完成。"
+    },
+    {
+      "id": "feat-010",
+      "name": "端到端验收与风险收敛",
+      "description": "稳定复现从 Chrome 提交文章到 web2audio 生成音频、登记 love-song 可播放资源、追加「今日待读」，再到 love-song iOS 播放器连续播放文章音频的闭环，并记录正文提取、TTS 成本、TOS 存储和跨系统同步风险。",
+      "dependencies": ["feat-006", "feat-007", "feat-008"],
+      "status": "not-started",
+      "evidence": "",
+      "workstream": "end-to-end",
+      "parallel_group": "final-integration",
+      "parallel_notes": "不可并行提前完成；它依赖 web2audio、love-song 后端和 iOS 三条线都达到可联调状态。"
     }
   ]
 }

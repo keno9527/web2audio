@@ -8,6 +8,7 @@ required_files=(
   "AGENTS.md"
   "README.md"
   "docs/PRODUCT.md"
+  "docs/TECHNICAL_DESIGN.md"
   "feature_list.json"
   "progress.md"
   "session-handoff.md"
@@ -69,6 +70,16 @@ if grep -R -n -E "$placeholder_pattern" AGENTS.md README.md docs feature_list.js
 fi
 
 echo "通过：未发现已知模板文本残留"
+
+if [[ -d "backend/tests" ]]; then
+  echo "=== 运行后端测试 ==="
+  PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests
+fi
+
+if [[ -d "extension/tests" ]]; then
+  echo "=== 运行 Chrome 插件测试 ==="
+  node --test extension/tests/article_extractor.test.cjs
+fi
 
 echo "=== 验证完成 ==="
 echo ""
