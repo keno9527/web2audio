@@ -1,0 +1,10 @@
+<h2>web2audio 技术方案总体架构图</h2>
+<p>该画板用于评审 web2audio 与 love-song 的系统边界和主链路。</p>
+<whiteboard type="mermaid">flowchart LR
+  A["Chrome 插件"] --&gt;|提交文章| B["web2audio API"]
+  B --&gt; C["文章任务库"]
+  B --&gt;|异步处理| D["清洗与 TTS"]
+  D --&gt;|音频对象| E["TOS 存储"]
+  D --&gt;|登记资源| F["love-song API"]
+  F --&gt; G["今日待读"]
+  G --&gt; H["iOS 播放器"]</whiteboard>

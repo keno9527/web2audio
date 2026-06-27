@@ -1,0 +1,8 @@
+flowchart LR
+  A["Chrome 插件"] -->|提交文章| B["web2audio API"]
+  B --> C["文章任务库"]
+  B -->|异步处理| D["清洗与 TTS"]
+  D -->|音频对象| E["TOS 存储"]
+  D -->|登记资源| F["love-song API"]
+  F --> G["今日待读"]
+  G --> H["iOS 播放器"]

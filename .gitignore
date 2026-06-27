@@ -1,0 +1,6 @@
+.pytest_cache/
+.lark-home/
+__pycache__/
+*.py[cod]
+web2audio.db
+backend/web2audio.db
