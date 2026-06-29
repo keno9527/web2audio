@@ -35,8 +35,8 @@
     },
     {
       "id": "feat-004",
-      "name": "豆包 lite TTS 与火山云 TOS 音频产物",
-      "description": "基于已清洗分段调用豆包 lite 生成分段音频，合成最终文章音频并上传火山云 TOS，回写 audio_storage_key、duration_seconds 和 audio_status。",
+      "name": "豆包 TTS 与火山云 TOS 音频产物",
+      "description": "基于已清洗分段调用豆包语音合成生成分段音频，合成最终文章音频并上传火山云 TOS，回写 audio_storage_key、duration_seconds 和 audio_status。",
       "dependencies": ["feat-003"],
       "status": "done",
       "evidence": "2026-06-27 10:50 CST 完成 fake 豆包 lite TTS client、fake 火山云 TOS storage 和 audio job；先运行新增测试确认 RED，再实现后运行 backend/tests 11 个 pytest 用例通过，插件 2 个 node:test 用例通过。",
@@ -60,8 +60,8 @@
       "name": "love-song TOS 资源登记 API",
       "description": "在 love-song 侧实现幂等的 POST /api/assets/tos，使用 external_source + external_id 创建或复用 track 与 audio asset，并返回稳定业务 ID。",
       "dependencies": ["feat-005"],
-      "status": "not-started",
-      "evidence": "",
+      "status": "in-progress",
+      "evidence": "2026-06-29 19:43 CST 已完成后端真实依赖 live 验证：W2A-E2E-008 通过真实 Doubao + TOS audio job，W2A-E2E-010 通过真实 Doubao + TOS + love-song HTTP 后端链路并到达 playable；iOS 连续播放和展示语义仍待 W2A-E2E-011 到 W2A-E2E-013 人工验收。",
       "workstream": "love-song-backend",
       "parallel_group": "wave-2-after-contract",
       "parallel_notes": "可与 feat-004、feat-007 并行；只依赖跨工程契约冻结，不阻塞 web2audio 先用 fake client 开发。"

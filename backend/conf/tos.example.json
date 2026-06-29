@@ -1,0 +1,8 @@
+{
+  "access_key_id": "",
+  "access_key_secret": "",
+  "endpoint": "tos-cn-beijing.volces.com",
+  "region": "cn-beijing",
+  "bucket": "",
+  "object_prefix": "web2audio"
+}

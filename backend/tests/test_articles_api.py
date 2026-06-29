@@ -8,16 +8,12 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.main import create_app  # noqa: E402
-
-
 TOKEN = "test-token"
 ARTICLE_URL = "https://mp.weixin.qq.com/s/sVgTl03Hh3zaNFBh7X-ckQ"
 
 
-def make_client(tmp_path: Path) -> TestClient:
-    db_url = f"sqlite:///{tmp_path / 'web2audio-test.db'}"
-    app = create_app(database_url=db_url, auth_token=TOKEN)
+def make_client(mysql_app_factory) -> TestClient:
+    app = mysql_app_factory(TOKEN)
     return TestClient(app)
 
 
@@ -38,8 +34,8 @@ def article_payload() -> dict[str, str]:
     }
 
 
-def test_health_endpoint_reports_ok(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+def test_health_endpoint_reports_ok(mysql_app_factory) -> None:
+    client = make_client(mysql_app_factory)
 
     response = client.get("/api/health")
 
@@ -47,8 +43,8 @@ def test_health_endpoint_reports_ok(tmp_path: Path) -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_post_article_creates_task_and_detail_can_be_queried(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+def test_post_article_creates_task_and_detail_can_be_queried(mysql_app_factory) -> None:
+    client = make_client(mysql_app_factory)
 
     response = client.post("/api/articles", json=article_payload(), headers=auth_headers())
 
@@ -75,8 +71,8 @@ def test_post_article_creates_task_and_detail_can_be_queried(tmp_path: Path) -> 
     assert detail_body["status"] == "submitted"
 
 
-def test_post_article_is_idempotent_by_exact_source_url(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+def test_post_article_is_idempotent_by_exact_source_url(mysql_app_factory) -> None:
+    client = make_client(mysql_app_factory)
 
     first = client.post("/api/articles", json=article_payload(), headers=auth_headers())
     second = client.post("/api/articles", json=article_payload(), headers=auth_headers())
@@ -91,8 +87,8 @@ def test_post_article_is_idempotent_by_exact_source_url(tmp_path: Path) -> None:
     assert listed.json()["items"][0]["article_id"] == first.json()["article_id"]
 
 
-def test_list_articles_supports_status_and_source_url_filters(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+def test_list_articles_supports_status_and_source_url_filters(mysql_app_factory) -> None:
+    client = make_client(mysql_app_factory)
     created = client.post("/api/articles", json=article_payload(), headers=auth_headers())
 
     response = client.get(
@@ -109,8 +105,8 @@ def test_list_articles_supports_status_and_source_url_filters(tmp_path: Path) ->
     assert body["items"][0]["article_id"] == created.json()["article_id"]
 
 
-def test_articles_api_requires_bearer_token(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+def test_articles_api_requires_bearer_token(mysql_app_factory) -> None:
+    client = make_client(mysql_app_factory)
 
     response = client.post("/api/articles", json=article_payload())
 
@@ -118,8 +114,8 @@ def test_articles_api_requires_bearer_token(tmp_path: Path) -> None:
     assert response.json()["error"]["code"] == "unauthorized"
 
 
-def test_post_article_rejects_invalid_payload(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+def test_post_article_rejects_invalid_payload(mysql_app_factory) -> None:
+    client = make_client(mysql_app_factory)
     payload = article_payload() | {"source_url": "ftp://example.com/a", "unexpected": True}
 
     response = client.post("/api/articles", json=payload, headers=auth_headers())

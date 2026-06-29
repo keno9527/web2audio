@@ -7,8 +7,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.audio_jobs import FakeTosStorage, FakeTtsClient, process_article_audio
-from app.love_song_contract import FakeLoveSongClient
+from app.audio_jobs import process_article_audio
+from app.clients.fake import FakeLoveSongClient, FakeTosStorage, FakeTtsClient
 from app.main import ArticleAudioItem
 from app.player_sync_jobs import process_player_sync
 from app.text_jobs import process_article_text

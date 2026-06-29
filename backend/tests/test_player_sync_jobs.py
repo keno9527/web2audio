@@ -9,14 +9,13 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.audio_jobs import FakeTosStorage, FakeTtsClient, process_article_audio  # noqa: E402
-from app.love_song_contract import FakeLoveSongClient  # noqa: E402
+from app.audio_jobs import process_article_audio  # noqa: E402
+from app.clients.fake import FakeLoveSongClient, FakeTosStorage, FakeTtsClient  # noqa: E402
 from app.main import (  # noqa: E402
     AUDIO_READY,
     PLAYER_FAILED,
     PLAYER_READY,
     ArticleAudioItem,
-    create_app,
 )
 from app.player_sync_jobs import process_player_sync  # noqa: E402
 from app.text_jobs import process_article_text  # noqa: E402
@@ -42,10 +41,9 @@ def article_payload() -> dict[str, str]:
 
 
 def test_process_player_sync_registers_asset_and_appends_playlist_idempotently(
-    tmp_path: Path,
+    mysql_app_factory,
 ) -> None:
-    db_url = f"sqlite:///{tmp_path / 'web2audio-test.db'}"
-    app = create_app(database_url=db_url, auth_token=TOKEN)
+    app = mysql_app_factory(TOKEN)
     client = TestClient(app)
     created = client.post("/api/articles", json=article_payload(), headers=auth_headers())
     article_id = created.json()["article_id"]
@@ -89,9 +87,8 @@ def test_process_player_sync_registers_asset_and_appends_playlist_idempotently(
     assert love_song_client.playlist_tracks[PLAYLIST_ID] == [first.track_id]
 
 
-def test_process_player_sync_fails_when_audio_is_not_ready(tmp_path: Path) -> None:
-    db_url = f"sqlite:///{tmp_path / 'web2audio-test.db'}"
-    app = create_app(database_url=db_url, auth_token=TOKEN)
+def test_process_player_sync_fails_when_audio_is_not_ready(mysql_app_factory) -> None:
+    app = mysql_app_factory(TOKEN)
     client = TestClient(app)
     created = client.post("/api/articles", json=article_payload(), headers=auth_headers())
     article_id = created.json()["article_id"]

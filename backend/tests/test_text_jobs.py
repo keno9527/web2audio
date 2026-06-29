@@ -15,7 +15,6 @@ from app.main import (  # noqa: E402
     TEXT_READY,
     ArticleAudioItem,
     ArticleTtsSegment,
-    create_app,
 )
 from app.text_jobs import process_article_text  # noqa: E402
 
@@ -38,9 +37,10 @@ def article_payload() -> dict[str, str]:
     }
 
 
-def test_process_article_text_writes_clean_body_segments_and_ready_status(tmp_path: Path) -> None:
-    db_url = f"sqlite:///{tmp_path / 'web2audio-test.db'}"
-    app = create_app(database_url=db_url, auth_token=TOKEN)
+def test_process_article_text_writes_clean_body_segments_and_ready_status(
+    mysql_app_factory,
+) -> None:
+    app = mysql_app_factory(TOKEN)
     client = TestClient(app)
     created = client.post("/api/articles", json=article_payload(), headers=auth_headers())
     article_id = created.json()["article_id"]

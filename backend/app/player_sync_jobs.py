@@ -6,10 +6,10 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.clients.love_song import LoveSongClient
 from app.love_song_contract import (
     ARTICLE_AUDIO_CONTENT_TYPE,
     WEB2AUDIO_EXTERNAL_SOURCE,
-    FakeLoveSongClient,
     TosAssetRegistrationRequest,
 )
 from app.main import (
@@ -51,7 +51,7 @@ def process_player_sync(
     session: Session,
     article_id: str,
     *,
-    love_song_client: FakeLoveSongClient,
+    love_song_client: LoveSongClient,
     playlist_id: str,
 ) -> PlayerSyncResult:
     article = session.scalar(

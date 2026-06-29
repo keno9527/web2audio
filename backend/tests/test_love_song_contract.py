@@ -6,10 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.love_song_contract import (  # noqa: E402
-    FakeLoveSongClient,
-    TosAssetRegistrationRequest,
-)
+from app.clients.fake import FakeLoveSongClient  # noqa: E402
+from app.love_song_contract import TosAssetRegistrationRequest  # noqa: E402
 
 
 def test_fake_love_song_client_registers_tos_asset_idempotently() -> None:
