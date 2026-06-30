@@ -14,12 +14,15 @@ from app.love_song_contract import (
 )
 from app.main import (
     AUDIO_READY,
+    AUDIO_STATUS_LABELS,
     PLAYER_FAILED,
     PLAYER_PROCESSING,
     PLAYER_READY,
+    PLAYER_STATUS_LABELS,
     ArticleAudioItem,
     utc_now_naive,
 )
+from app.observability import log_pipeline_event
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,12 @@ def process_player_sync(
         select(ArticleAudioItem).where(ArticleAudioItem.article_id == article_id)
     )
     if article is None:
+        log_pipeline_event(
+            "player_sync_failed",
+            "player_sync",
+            article_id=article_id,
+            error_code="article_not_found",
+        )
         return PlayerSyncResult(
             synced=False,
             article_id=article_id,
@@ -73,6 +82,16 @@ def process_player_sync(
         article.player_sync_status = PLAYER_FAILED
         article.updated_at = utc_now_naive()
         session.commit()
+        log_pipeline_event(
+            "player_sync_failed",
+            "player_sync",
+            article_id=article.article_id,
+            error_code="audio_not_ready",
+            audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+            player_sync_status=PLAYER_STATUS_LABELS[article.player_sync_status],
+            storage_key=article.audio_storage_key,
+            duration_seconds=article.duration_seconds,
+        )
         return PlayerSyncResult(
             synced=False,
             article_id=article.article_id,
@@ -80,6 +99,15 @@ def process_player_sync(
             error_code="audio_not_ready",
         )
 
+    log_pipeline_event(
+        "player_sync_started",
+        "player_sync",
+        article_id=article.article_id,
+        audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        player_sync_status=PLAYER_STATUS_LABELS[article.player_sync_status],
+        storage_key=article.audio_storage_key,
+        playlist_id=playlist_id,
+    )
     article.player_sync_status = PLAYER_PROCESSING
     article.updated_at = utc_now_naive()
     session.flush()
@@ -89,10 +117,19 @@ def process_player_sync(
             build_tos_registration_request(article)
         )
         love_song_client.append_track_to_playlist(playlist_id, registered.track_id)
-    except Exception:
+    except Exception as exc:
         article.player_sync_status = PLAYER_FAILED
         article.updated_at = utc_now_naive()
         session.commit()
+        log_pipeline_event(
+            "player_sync_failed",
+            "player_sync",
+            article_id=article.article_id,
+            error_code="love_song_sync_failed",
+            error_detail=str(exc),
+            player_sync_status=PLAYER_STATUS_LABELS[article.player_sync_status],
+            playlist_id=playlist_id,
+        )
         return PlayerSyncResult(
             synced=False,
             article_id=article.article_id,
@@ -107,6 +144,15 @@ def process_player_sync(
     article.player_synced_at = utc_now_naive()
     article.updated_at = article.player_synced_at
     session.commit()
+    log_pipeline_event(
+        "player_sync_ready",
+        "player_sync",
+        article_id=article.article_id,
+        player_sync_status=PLAYER_STATUS_LABELS[article.player_sync_status],
+        track_id=registered.track_id,
+        asset_id=registered.asset_id,
+        playlist_id=playlist_id,
+    )
 
     return PlayerSyncResult(
         synced=True,

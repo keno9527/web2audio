@@ -13,11 +13,14 @@ from app.main import (
     AUDIO_PENDING,
     AUDIO_PROCESSING,
     AUDIO_READY,
+    AUDIO_STATUS_LABELS,
     TEXT_READY,
+    TEXT_STATUS_LABELS,
     ArticleAudioItem,
     ArticleTtsSegment,
     utc_now_naive,
 )
+from app.observability import log_pipeline_event
 
 
 @dataclass(frozen=True)
@@ -43,6 +46,12 @@ def process_article_audio(
         select(ArticleAudioItem).where(ArticleAudioItem.article_id == article_id)
     )
     if article is None:
+        log_pipeline_event(
+            "audio_generation_failed",
+            "audio_generation",
+            article_id=article_id,
+            error_code="article_not_found",
+        )
         return AudioProcessingResult(
             generated=False,
             article_id=article_id,
@@ -54,6 +63,14 @@ def process_article_audio(
         article.audio_status = AUDIO_FAILED
         article.updated_at = utc_now_naive()
         session.commit()
+        log_pipeline_event(
+            "audio_generation_failed",
+            "audio_generation",
+            article_id=article.article_id,
+            error_code="text_not_ready",
+            text_status=TEXT_STATUS_LABELS[article.text_status],
+            audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        )
         return AudioProcessingResult(
             generated=False,
             article_id=article.article_id,
@@ -70,6 +87,14 @@ def process_article_audio(
         article.audio_status = AUDIO_FAILED
         article.updated_at = utc_now_naive()
         session.commit()
+        log_pipeline_event(
+            "audio_generation_failed",
+            "audio_generation",
+            article_id=article.article_id,
+            error_code="segments_missing",
+            text_status=TEXT_STATUS_LABELS[article.text_status],
+            audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        )
         return AudioProcessingResult(
             generated=False,
             article_id=article.article_id,
@@ -77,6 +102,14 @@ def process_article_audio(
             error_code="segments_missing",
         )
 
+    log_pipeline_event(
+        "audio_generation_started",
+        "audio_generation",
+        article_id=article.article_id,
+        text_status=TEXT_STATUS_LABELS[article.text_status],
+        audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        segment_count=len(segments),
+    )
     article.audio_status = AUDIO_PROCESSING
     article.updated_at = utc_now_naive()
     session.flush()
@@ -89,6 +122,14 @@ def process_article_audio(
                 segment.tts_status = AUDIO_FAILED
                 segment.updated_at = utc_now_naive()
         session.commit()
+        log_pipeline_event(
+            "audio_generation_failed",
+            "audio_generation",
+            article_id=article.article_id,
+            error_code=error_code,
+            error_detail=str(exc),
+            audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        )
         return AudioProcessingResult(
             generated=False,
             article_id=article.article_id,
@@ -100,6 +141,14 @@ def process_article_audio(
     total_duration = 0
     segment_payloads: list[bytes] = []
     for segment in segments:
+        log_pipeline_event(
+            "audio_segment_started",
+            "audio_generation",
+            article_id=article.article_id,
+            segment_id=segment.segment_id,
+            segment_index=segment.segment_index,
+            text_char_count=segment.text_char_count,
+        )
         segment.tts_status = AUDIO_PROCESSING
         segment.updated_at = utc_now_naive()
         session.flush()
@@ -124,6 +173,15 @@ def process_article_audio(
         segment.updated_at = utc_now_naive()
         total_duration += synthesized.duration_seconds
         segment_payloads.append(synthesized.content)
+        log_pipeline_event(
+            "audio_segment_ready",
+            "audio_generation",
+            article_id=article.article_id,
+            segment_id=segment.segment_id,
+            segment_index=segment.segment_index,
+            storage_key=segment.audio_storage_key,
+            duration_seconds=segment.duration_seconds,
+        )
 
     final_key = f"web2audio/articles/{article.article_id}/final.mp3"
     final_payload = b"\n".join(segment_payloads)
@@ -136,6 +194,16 @@ def process_article_audio(
     article.audio_ready_at = utc_now_naive()
     article.updated_at = article.audio_ready_at
     session.commit()
+    log_pipeline_event(
+        "audio_generation_ready",
+        "audio_generation",
+        article_id=article.article_id,
+        audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        segment_count=len(segments),
+        storage_key=article.audio_storage_key,
+        duration_seconds=article.duration_seconds,
+        next_stage="player_sync",
+    )
 
     return AudioProcessingResult(
         generated=True,

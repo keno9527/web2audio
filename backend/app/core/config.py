@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     app_name: str = "web2audio"
     env: str = "development"
+    log_level: str = "INFO"
     database_url: str = DEFAULT_DATABASE_URL
     database_config_path: str = "conf/db.local.json"
     database_profile: str = ""

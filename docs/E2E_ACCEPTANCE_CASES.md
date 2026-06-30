@@ -2,7 +2,7 @@
 
 本文档按 `e2e-test-design` skill 重新整理 web2audio 第一版端到端验收 case。文档只保留影响验收执行的目标、环境、配置、case 矩阵、关键明细、自动化进度、待确认事项和剩余风险。
 
-状态更新时间：2026-06-29 21:10 CST。
+状态更新时间：2026-06-30 11:06 CST。
 
 ## 1. 验收目标和链路摘要
 
@@ -46,7 +46,7 @@ flowchart LR
 | 账号和权限 | 默认固定 token；测试 token 为 `test-token`，本地开发 token 为 `dev-token` |
 | 测试数据 | 公开文章 URL `https://mp.weixin.qq.com/s/sVgTl03Hh3zaNFBh7X-ckQ`；中文正文、站点、作者、发布时间和封面 URL |
 | 清理策略 | MySQL 测试数据按 `owner_user_id` 清理；fake TOS object 和 fake love-song 歌单状态随测试进程销毁 |
-| 当前验证命令 | `./init.sh`，后端 37 passed、4 skipped，插件 2 passed |
+| 当前验证命令 | `./init.sh`，后端 37 passed、7 skipped，插件 2 passed |
 
 ### 线上配置联调环境
 
@@ -80,7 +80,7 @@ W2A-E2E-011 到 W2A-E2E-013 不驱动真机 app，而是直接调用 love-song i
 
 | Case ID | Case 分类 | 验收目标 | 执行分支 | 核心断言 | 跟进状态 | 优先级 |
 | --- | --- | --- | --- | --- | --- | --- |
-| W2A-E2E-001 | 文章转音频/主路径/mock | 证明 fake 链路能从文章提交闭环到 `playable` | 自动化 | `./init.sh` 已覆盖 fake full chain 到 `playable`；后端 37 passed、4 skipped，插件 2 passed | 已自动化通过 | P0 |
+| W2A-E2E-001 | 文章转音频/主路径/mock | 证明 fake 链路能从文章提交闭环到 `playable` | 自动化 | `./init.sh` 已覆盖 fake full chain 到 `playable`；后端 37 passed、7 skipped，插件 2 passed | 已自动化通过 | P0 |
 | W2A-E2E-002 | 文章收集/幂等重复/mock | 证明同一原始 URL 重复提交不重复建文章或重复追加歌单 | 自动化 | 重复提交返回同一 article_id；文章总数不增加；重复同步不重复追加歌单 track | 已自动化通过 | P0 |
 | W2A-E2E-003 | 正文处理/数据边界/mock | 证明无有效正文不会消耗音频生成或进入播放链路 | 自动化 | text failed；audio/player failed；无 audio key；无 love-song IDs 和副作用 | 已自动化通过 | P0 |
 | W2A-E2E-004 | 音频生成/异步失败/mock | 证明 TTS 或 TOS 异常不会产生错误可播放数据 | 自动化 | TTS 失败后 article failed；无 storage object；无 love-song 登记 | 已自动化通过 | P1 |
@@ -287,7 +287,7 @@ W2A-E2E-011 到 W2A-E2E-013 不驱动真机 app，而是直接调用 love-song i
 - 自动化入口：显式开启 `W2A_RUN_REAL_FULL_CHAIN=1`；默认 `./init.sh` 中跳过。
 - 待确认事项：Chrome 真实点击和 iOS 播放不在该 case 范围内；love-song 8000 旧进程仍需重启或下线。
 - 优先级：P0。
-- 风险说明：该 case 证明真实后端链路到 `playable`，但不替代 W2A-E2E-011 到 W2A-E2E-013 的 iOS 人工验收。
+- 风险说明：该 case 证明真实后端链路到 `playable`，W2A-E2E-011 到 W2A-E2E-013 继续通过 iOS 对应接口覆盖播放、展示语义、顺序和历史。
 
 ### W2A-E2E-011：Chrome 提交后文章经 iOS 接口在「今日待读」可播放
 
@@ -367,18 +367,18 @@ W2A-E2E-011 到 W2A-E2E-013 不驱动真机 app，而是直接调用 love-song i
 
 | Case ID | 场景名 | 自动化入口 | 最近通过时间或版本 |
 | --- | --- | --- | --- |
-| W2A-E2E-001 | 普通文章提交到可播放 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
-| W2A-E2E-002 | 重复提交不重复建文章或追加歌单 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
-| W2A-E2E-003 | 正文不可用时不生成音频 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
-| W2A-E2E-004 | TTS 失败不产生可播放副作用 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
-| W2A-E2E-005 | love-song 同步失败后可恢复 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
-| W2A-E2E-006 | 运行时配置兼容回归 | `./init.sh`；`backend/tests/test_runtime_config.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
-| W2A-E2E-007 | 插件提取 payload 后写入正文数据库 | `./init.sh`；`node --test extension/tests/article_extractor.test.cjs`；`backend/tests/test_webpage_text_db_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-001 | 普通文章提交到可播放 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-30，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-002 | 重复提交不重复建文章或追加歌单 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-30，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-003 | 正文不可用时不生成音频 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-30，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-004 | TTS 失败不产生可播放副作用 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-30，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-005 | love-song 同步失败后可恢复 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-30，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-006 | 运行时配置兼容回归 | `./init.sh`；`backend/tests/test_runtime_config.py` | 2026-06-30，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-007 | 插件提取 payload 后写入正文数据库 | `./init.sh`；`node --test extension/tests/article_extractor.test.cjs`；`backend/tests/test_webpage_text_db_chain.py` | 2026-06-30，后端 37 passed、7 skipped，插件 2 passed |
 | W2A-E2E-008 | 真实 Doubao TTS 与真实 TOS 音频产物 | `W2A_RUN_REAL_AUDIO_JOB=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_008_real_doubao_tts_and_tos_audio_job -s` | 2026-06-29，1 passed，真实 Doubao 合成、真实 TOS 上传和 object head 校验通过 |
 | W2A-E2E-010 | 真实 Doubao、TOS 和 love-song 完整后端链路 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_010_real_doubao_tos_and_love_song_full_chain -s` | 2026-06-29，1 passed，article 到 `playable`，love-song 歌单回读 `article_audio` |
-| W2A-E2E-011 | 文章经 iOS 接口在「今日待读」可播放 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_011_ios_today_reading_playable_via_love_song_api -s` | 2026-06-29，1 passed，歌单详情含文章 track，播放会话定位该 track，`playback-url` 返回 `source_type=tos` 文章音频 URL |
-| W2A-E2E-012 | 文章音频经 iOS 接口展示为文章语义 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_012_ios_article_semantics_via_love_song_api -s` | 2026-06-29，1 passed，歌单详情 track `content_type=article_audio`、`subtitle=site_name`、`artist=null`、`album=null` |
-| W2A-E2E-013 | 多篇文章经 iOS 接口顺序连播并记录历史 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_013_ios_sequential_playback_and_history_via_love_song_api -s` | 2026-06-29，1 passed，两篇文章 position 连续，会话顺序一致，逐首取得播放 URL 并写入两条播放历史 |
+| W2A-E2E-011 | 文章经 iOS 接口在「今日待读」可播放 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_011_ios_today_reading_playable_via_love_song_api -s` | 2026-06-30，live 批量 3 passed；歌单详情含文章 track，播放会话定位该 track，`playback-url` 返回 `source_type=tos` 文章音频 URL |
+| W2A-E2E-012 | 文章音频经 iOS 接口展示为文章语义 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_012_ios_article_semantics_via_love_song_api -s` | 2026-06-30，live 批量 3 passed；歌单详情 track `content_type=article_audio`、`subtitle=site_name`、`artist=null`、`album=null` |
+| W2A-E2E-013 | 多篇文章经 iOS 接口顺序连播并记录历史 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_013_ios_sequential_playback_and_history_via_love_song_api -s` | 2026-06-30，live 批量 3 passed；两篇文章 position 连续，会话顺序一致，逐首取得播放 URL 并写入两条播放历史 |
 
 ### 已人工通过的 Case
 

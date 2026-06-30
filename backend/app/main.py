@@ -33,6 +33,7 @@ from app.core.config import (
     settings as default_settings,
 )
 from app.db.session import create_engine_and_session_factory
+from app.observability import configure_logging, log_pipeline_event
 
 TEXT_QUEUED = 0
 TEXT_PROCESSING = 1
@@ -310,6 +311,7 @@ def create_app(
     if overrides:
         runtime_settings = runtime_settings.model_copy(update=overrides)
 
+    configure_logging(runtime_settings.log_level)
     engine, session_factory = create_engine_and_session_factory(
         runtime_settings.resolve_database_url()
     )
@@ -357,6 +359,17 @@ def create_app(
             )
         )
         if existing is not None:
+            log_pipeline_event(
+                "article_task_duplicate",
+                "article_submission",
+                article_id=existing.article_id,
+                owner_user_id=existing.owner_user_id,
+                source_url_hash=existing.source_url_hash,
+                status=visible_status(existing),
+                text_status=TEXT_STATUS_LABELS[existing.text_status],
+                audio_status=AUDIO_STATUS_LABELS[existing.audio_status],
+                player_sync_status=PLAYER_STATUS_LABELS[existing.player_sync_status],
+            )
             response.status_code = 200
             return article_response(existing, created=False)
 
@@ -384,6 +397,24 @@ def create_app(
         db.add(article)
         db.commit()
         db.refresh(article)
+        log_pipeline_event(
+            "article_task_created",
+            "article_submission",
+            article_id=article.article_id,
+            owner_user_id=article.owner_user_id,
+            source_url_hash=article.source_url_hash,
+            text_status=TEXT_STATUS_LABELS[article.text_status],
+            audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+            player_sync_status=PLAYER_STATUS_LABELS[article.player_sync_status],
+            text_char_count=article.text_char_count,
+        )
+        log_pipeline_event(
+            "article_waiting_for_worker",
+            "article_submission",
+            article_id=article.article_id,
+            next_stage="text_processing",
+            worker_trigger="external_or_manual",
+        )
         response.status_code = 201
         return article_response(article, created=True)
 

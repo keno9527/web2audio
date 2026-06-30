@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+if ! command -v node >/dev/null 2>&1; then
+  bundled_node_dir="$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin"
+  if [[ -x "$bundled_node_dir/node" ]]; then
+    export PATH="$bundled_node_dir:$PATH"
+  fi
+fi
+
 echo "=== web2audio 启动验证 ==="
 
 echo "=== 检查必需文件 ==="
@@ -78,7 +85,11 @@ fi
 
 if [[ -d "extension/tests" ]]; then
   echo "=== 运行 Chrome 插件测试 ==="
-  node --test extension/tests/article_extractor.test.cjs
+  if ! command -v node >/dev/null 2>&1; then
+    echo "缺少 Node.js，无法运行 Chrome 插件测试。"
+    exit 1
+  fi
+  node --test extension/tests/*.test.cjs
 fi
 
 echo "=== 验证完成 ==="

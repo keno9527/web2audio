@@ -8,14 +8,18 @@ from sqlalchemy.orm import Session
 
 from app.main import (
     AUDIO_PENDING,
+    AUDIO_STATUS_LABELS,
+    PLAYER_STATUS_LABELS,
     TEXT_FAILED,
     TEXT_PROCESSING,
     TEXT_READY,
+    TEXT_STATUS_LABELS,
     ArticleAudioItem,
     ArticleTtsSegment,
     make_business_id,
     utc_now_naive,
 )
+from app.observability import log_pipeline_event
 from app.text_processing import prepare_article_text
 
 
@@ -39,6 +43,12 @@ def process_article_text(
         select(ArticleAudioItem).where(ArticleAudioItem.article_id == article_id)
     )
     if article is None:
+        log_pipeline_event(
+            "text_processing_failed",
+            "text_processing",
+            article_id=article_id,
+            error_code="article_not_found",
+        )
         return TextProcessingResult(
             processed=False,
             article_id=article_id,
@@ -46,6 +56,15 @@ def process_article_text(
             error_code="article_not_found",
         )
 
+    log_pipeline_event(
+        "text_processing_started",
+        "text_processing",
+        article_id=article.article_id,
+        text_status=TEXT_STATUS_LABELS[article.text_status],
+        audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        player_sync_status=PLAYER_STATUS_LABELS[article.player_sync_status],
+        text_char_count=article.text_char_count,
+    )
     now = utc_now_naive()
     article.text_status = TEXT_PROCESSING
     article.updated_at = now
@@ -69,6 +88,14 @@ def process_article_text(
     if prepared.error_code is not None:
         article.text_status = TEXT_FAILED
         session.commit()
+        log_pipeline_event(
+            "text_processing_failed",
+            "text_processing",
+            article_id=article.article_id,
+            error_code=prepared.error_code,
+            text_status=TEXT_STATUS_LABELS[article.text_status],
+            text_char_count=article.text_char_count,
+        )
         return TextProcessingResult(
             processed=False,
             article_id=article.article_id,
@@ -93,6 +120,17 @@ def process_article_text(
 
     article.text_status = TEXT_READY
     session.commit()
+    log_pipeline_event(
+        "text_processing_ready",
+        "text_processing",
+        article_id=article.article_id,
+        text_status=TEXT_STATUS_LABELS[article.text_status],
+        audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        player_sync_status=PLAYER_STATUS_LABELS[article.player_sync_status],
+        text_char_count=article.text_char_count,
+        segment_count=len(prepared.segments),
+        next_stage="audio_generation",
+    )
     return TextProcessingResult(
         processed=True,
         article_id=article.article_id,

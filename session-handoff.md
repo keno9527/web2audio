@@ -2,8 +2,8 @@
 
 ## 当前目标
 
-- 目标：把 `W2A-E2E-011` 到 `W2A-E2E-013` 从 iOS 人工端测试改为通过 love-song iOS 对应 HTTP 接口做接口自动化，并完成自动化测试。
-- 当前状态：三个 case 已改为半自动化，复用真实 Doubao + TOS + love-song HTTP 全链路，经 love-song iOS 对应接口（歌单详情、播放会话、播放 URL、播放历史、会话切换）断言；显式开启 `W2A_RUN_REAL_FULL_CHAIN=1` 后实跑 `3 passed`；默认 `./init.sh` 后端 37 passed、7 skipped，插件 2 passed。`docs/E2E_ACCEPTANCE_CASES.md`、`feature_list.json`、`progress.md` 已同步。真机播放体验仍可人工抽查。
+- 目标：为 Chrome 提交后到正文处理、TTS/TOS、love-song 同步的后端关键链路补齐日志可观测性，并能通过日志快速判断哪个环节没有执行。
+- 当前状态：已完成。新增 `web2audio.pipeline` 结构化日志，覆盖 `article_submission`、`text_processing`、`audio_generation`、`player_sync` 四段。已确认当前 `POST /api/articles` 只负责文章入库，不自动触发后续 worker；若日志只有 `article_task_created` 和 `article_waiting_for_worker`，说明停在等待正文处理 worker。默认 `./init.sh` 通过，后端 39 passed、7 skipped，插件 5 passed。
 - 分支与提交：当前分支 `codex/feat-002-submit-entry` 基于 `f55c256 Localize project harness docs`，本次未提交。
 
 ## 本次已完成
@@ -12,9 +12,27 @@
   - 在 `backend/tests/test_live_e2e_external_chain.py` 抽出 `run_full_chain_to_playable` 复用真实 Doubao + TOS + love-song HTTP 全链路，并新增 `love_song_get_playlist`、`love_song_post`、`love_song_patch` 调用 iOS 对应接口。
   - 新增 `test_w2a_e2e_011_ios_today_reading_playable_via_love_song_api`、`test_w2a_e2e_012_ios_article_semantics_via_love_song_api`、`test_w2a_e2e_013_ios_sequential_playback_and_history_via_love_song_api`，均由 `W2A_RUN_REAL_FULL_CHAIN=1` 显式开启，默认 `./init.sh` 跳过。
   - 011 验证歌单详情含文章 track、播放会话定位、`playback-url` 返回 `source_type=tos` 文章音频 URL；012 验证 `content_type=article_audio`、`subtitle=site_name`、`artist=null`、`album=null`；013 验证两篇文章 position 连续、会话顺序一致、逐首播放 URL 与两条播放历史。
-  - 在 8001 启动 love-song 当前代码服务实跑三个 live 用例，`3 passed`。
+  - 2026-06-30 在 8001 启动 love-song 当前代码服务实跑三个 live 用例，`3 passed`，仅有 urllib3 LibreSSL NotOpenSSLWarning。
   - `docs/E2E_ACCEPTANCE_CASES.md`：矩阵、关键 case 明细、已自动化通过表、待确认表、冒烟/回归集状态、剩余风险和第 1、2 章环境说明同步更新。
   - `feature_list.json` `feat-010` 证据、`progress.md` 同步更新。
+
+- 修复 Chrome 插件 popup 提交接收端缺失：
+  - `extension/popup.js` 增加页面 URL 支持判断，`chrome://`、扩展管理页等不支持页面不再发送 content script 消息。
+  - 对普通 `http/https` 页面，首次 `chrome.tabs.sendMessage` 遇到 `Could not establish connection. Receiving end does not exist.` 时，通过 `chrome.scripting.executeScript` 注入 `content.js` 并重试。
+  - popup 的 DOM 绑定只在浏览器环境执行，通信逻辑可通过 node:test 直接验证。
+  - 新增 `extension/tests/popup.test.cjs`，覆盖 URL 判断、接收端缺失注入重试、不支持页面短路。
+  - `init.sh` 在缺少系统 Node 时会使用 Codex 本地 Node 运行时，并运行 `extension/tests/*.test.cjs`。
+  - `extension/README.md` 补充 unpacked 插件刷新、普通网页使用边界和全部插件测试命令。
+
+- 补齐后端 pipeline 日志可观测性：
+  - 已定位 Chrome 提交后不继续转语音的直接原因：`POST /api/articles` 创建任务后返回，`process_article_text`、`process_article_audio`、`process_player_sync` 当前需要外部 worker 或测试显式调用。
+  - 新增 `backend/app/observability.py`，统一 `web2audio.pipeline` logger 和 key-value 日志格式。
+  - `backend/app/main.py` 输出 `article_task_created`、`article_task_duplicate`、`article_waiting_for_worker`；新建文章日志含 `article_id`、`source_url_hash`、三类状态和 `text_char_count`。
+  - `backend/app/text_jobs.py` 输出 `text_processing_started`、`text_processing_ready`、`text_processing_failed`；ready 日志含 `segment_count` 和 `next_stage=audio_generation`。
+  - `backend/app/audio_jobs.py` 输出 `audio_generation_started`、`audio_segment_started`、`audio_segment_ready`、`audio_generation_ready`、`audio_generation_failed`；失败按 `tts_generation_failed`、`audio_storage_failed`、`segments_missing` 等 `error_code` 区分。
+  - `backend/app/player_sync_jobs.py` 输出 `player_sync_started`、`player_sync_ready`、`player_sync_failed`；同步失败保留 `error_code=love_song_sync_failed` 和 `error_detail`。
+  - 新增 `backend/tests/test_pipeline_logging.py`，验证提交后等待 worker 日志，以及 text/audio/player 三段用同一个 `article_id` 串联。
+  - `backend/README.md` 已补充 Pipeline Logs 排障表：按 `article_id` grep，依据缺失事件判断未执行阶段。
 
 - 更新 `docs/PRODUCT.md`：
   - 产品文档只保留产品目标、系统边界、核心流程、功能范围、验收标准和待确认项。
@@ -142,12 +160,12 @@
   - 当前 `backend/conf/doubao.local.json` 可构建真实 `DoubaoTtsClient`，endpoint 为 `wss://openspeech.bytedance.com/api/v3/tts/bidirection`，`resource_id=seed-tts-2.0`，`speaker=zh_female_vv_uranus_bigtts`。
   - 真实 TTS 调试已通过，生成 `/tmp/web2audio-doubao-debug.mp3`，文件大小 54K，`file` 识别为 128 kbps、24 kHz、单声道 MP3。
 - 完成当前端到端 case 状态更新：
-  - `docs/E2E_ACCEPTANCE_CASES.md` 已更新状态更新时间为 2026-06-29 19:43 CST。
-  - `W2A-E2E-001` 到 `W2A-E2E-007` 按 2026-06-29 `./init.sh` 结果标为已自动化通过。
+  - `docs/E2E_ACCEPTANCE_CASES.md` 已更新状态更新时间为 2026-06-30 11:06 CST。
+  - `W2A-E2E-001` 到 `W2A-E2E-007` 按 2026-06-30 `./init.sh` 结果标为已自动化通过。
   - `W2A-E2E-008` 和 `W2A-E2E-010` 标为已自动化通过；真实 Doubao/TOS/love-song 后端链路已有显式 live 自动化证据，但默认 `./init.sh` 中跳过。
   - `W2A-E2E-009` 标为已人工通过，证据为 love-song 8001 HTTP 探针、web2audio fake TTS + fake storage + 真实 love-song HTTP 分支到 `playable`、love-song 歌单查询。
-  - `W2A-E2E-011`、`W2A-E2E-012`、`W2A-E2E-013` 标为待人工验证，因为 love-song 后端已有文章语义字段，但 iOS 真机或模拟器未验收。
-  - 飞书文档 `https://bytedance.larkoffice.com/docx/OFG1dKwKWoaRUwxXJ83cbbuanRb` 已覆盖同步本次最新状态，revision_id 为 50。
+  - `W2A-E2E-011`、`W2A-E2E-012`、`W2A-E2E-013` 已按当前验收口径改为 iOS 对应接口自动化并通过；真机或模拟器只保留体验层抽查。
+  - 飞书文档 `https://bytedance.larkoffice.com/docx/OFG1dKwKWoaRUwxXJ83cbbuanRb` 已覆盖同步本次最新状态，revision_id 为 54。
 - 完成 E2E Case 矩阵自动化补充：
   - `backend/tests/test_fake_full_chain.py` 新增重复提交幂等、正文不可用、TTS 失败、love-song 同步失败后恢复 4 个端到端用例。
   - `W2A-E2E-002` 验证重复提交返回同一 article_id、文章总数不增加、重复同步不重复追加歌单 track。
@@ -172,19 +190,27 @@
   - 测试用 Node 调用真实 `extension/content.js` 的 `extractArticleFromDocument`，从模拟网页 document 提取标题、URL、站点、作者、语言和正文 payload。
   - 测试将 payload 提交到 `POST /api/articles`，再执行 `process_article_text`，最后查询 MySQL。
   - 断言覆盖 `article_audio_items` 的来源 URL、标题、站点、作者、语言、清洗正文、字符数和状态，以及 `article_tts_segments` 的分段顺序、分段文本和 `audio_status=pending`。
-  - `docs/E2E_ACCEPTANCE_CASES.md` 已把 `W2A-E2E-007` 更新为“插件提取 payload 后写入正文数据库”，并记录最新 `./init.sh` 后端 37 passed、4 skipped，插件 2 passed。
+  - `docs/E2E_ACCEPTANCE_CASES.md` 已把 `W2A-E2E-007` 更新为“插件提取 payload 后写入正文数据库”，并记录最新 `./init.sh` 后端 37 passed、7 skipped，插件 2 passed。
 - 完成 `W2A-E2E-008` / `W2A-E2E-010` live 自动化验证：
   - 新增 `backend/tests/test_live_e2e_external_chain.py`，默认跳过；显式开启 env 后才调用真实 Doubao、TOS 和 love-song。
   - 新增本地忽略配置 `backend/conf/love_song.local.json`，指向 `http://127.0.0.1:8001`。
   - `W2A-E2E-008` 验证同一篇文章完成真实 Doubao 合成、真实 TOS 上传和 object head 校验。
   - `W2A-E2E-010` 验证同一篇文章完成真实 Doubao、真实 TOS、真实 love-song HTTP 同步，web2audio article 到 `playable`，love-song 歌单回读 `content_type=article_audio` 和 `subtitle=site_name`。
   - `backend/conf/README.md` 已补充 `love_song.local.json` 格式和两个 live E2E 复跑命令。
-  - `feature_list.json` 中 `feat-010` 已更新为 `in-progress`，证据记录后端真实依赖 live 已通过、iOS 仍待人工验收。
+  - `feature_list.json` 中 `feat-010` 已更新为 `in-progress`，证据记录后端真实依赖 live 已通过、iOS 对应接口自动化已通过，真机体验只保留可选抽查。
 
 ## 验证证据
 
 | 检查 | 命令 | 结果 | 备注 |
 | --- | --- | --- | --- |
+| Pipeline logging RED | `PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_pipeline_logging.py` | 失败符合预期 | 旧代码没有 `web2audio.pipeline` 日志 |
+| Pipeline logging GREEN | `PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_pipeline_logging.py` | 通过 | 2 个用例覆盖提交等待 worker 和完整阶段日志 |
+| Pipeline logging 定向回归 | `PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_articles_api.py backend/tests/test_text_jobs.py backend/tests/test_audio_jobs.py backend/tests/test_player_sync_jobs.py` | 通过 | 12 passed |
+| Pipeline logging 最终启动验证 | `./init.sh` | 通过 | 后端 39 passed、7 skipped，插件 5 passed |
+| Chrome popup RED | `PATH="/Users/bytedance/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" node --test extension/tests/popup.test.cjs` | 失败符合预期 | 旧 `popup.js` 在 Node 下直接引用 `document`，无法测试通信逻辑 |
+| Chrome popup 定向 GREEN | `PATH="/Users/bytedance/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" node --test extension/tests/popup.test.cjs` | 通过 | 3 个用例覆盖 URL 判断、注入重试和不支持页面短路 |
+| Chrome 插件正文提取回归 | `PATH="/Users/bytedance/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" node --test extension/tests/article_extractor.test.cjs` | 通过 | 2 个用例通过 |
+| Chrome popup 修复最终启动验证 | `./init.sh` | 通过 | 后端 37 passed、7 skipped，插件 5 passed |
 | 当前 conf 基线 | `./init.sh` | 通过 | 后端 23 个 pytest 用例和插件 2 个 node:test 用例通过 |
 | 当前 conf 构建诊断 | `PYTHONPATH=backend python3 - <<'PY' ... build_tts_client/build_audio_storage/build_love_song_client ... PY` | 部分通过 | Doubao client 和 TOS storage 可构建；love-song HTTP 因缺少 `backend/conf/love_song.local.json` 快速失败 |
 | 当前 conf 最小真实分支 | `PYTHONPATH=backend PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY' ... real Doubao + real TOS + fake love-song ... PY` | 失败可定位 | 提交和正文处理成功；音频阶段为 `tts_generation_failed`，Doubao `/api/v3/audio/speech` 返回 404 |
@@ -234,12 +260,19 @@
 | W2A-E2E-008 默认跳过验证 | `PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_live_e2e_external_chain.py` | 通过 | 2 个 live 用例默认跳过，不触发真实外部依赖 |
 | W2A-E2E-008 live 验证 | `W2A_RUN_REAL_AUDIO_JOB=1 PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_008_real_doubao_tts_and_tos_audio_job -s` | 通过 | 1 个用例通过；真实 Doubao 合成、真实 TOS 上传和 object head 校验成功 |
 | W2A-E2E-010 live 验证 | `W2A_RUN_REAL_FULL_CHAIN=1 PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_010_real_doubao_tos_and_love_song_full_chain -s` | 通过 | 1 个用例通过；同一篇文章到 `playable`，love-song 歌单回读文章语义 |
+| W2A-E2E-011/012/013 默认跳过验证 | `PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_live_e2e_external_chain.py` | 通过 | 5 个 live 用例默认跳过，不触发真实外部依赖 |
+| W2A-E2E-011/012/013 live 复跑 | `W2A_RUN_REAL_FULL_CHAIN=1 PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_011_ios_today_reading_playable_via_love_song_api backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_012_ios_article_semantics_via_love_song_api backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_013_ios_sequential_playback_and_history_via_love_song_api -s` | 通过 | 2026-06-30 live 批量 3 passed，1 warning（urllib3 LibreSSL NotOpenSSLWarning） |
+| E2E 验收文档飞书同步 | `lark-cli docs +update --as user --doc 'https://bytedance.larkoffice.com/docx/OFG1dKwKWoaRUwxXJ83cbbuanRb' --command overwrite --doc-format markdown --content @docs/E2E_ACCEPTANCE_CASES.md --format json` | 通过 | revision_id 为 54 |
+| E2E 验收文档飞书读取验证 | `lark-cli docs +fetch --as user --doc 'https://bytedance.larkoffice.com/docx/OFG1dKwKWoaRUwxXJ83cbbuanRb' --doc-format markdown --scope keyword --keyword 'W2A-E2E-011|live 批量 3 passed|37 passed|W2A_RUN_REAL_FULL_CHAIN=1' ...` | 通过 | 011/012/013 已自动化通过、live 批量 3 passed、`37 passed、7 skipped` 和 live 命令可读取 |
+| E2E case 状态更新最终启动验证 | `./init.sh` | 通过 | 后端 37 passed、7 skipped，插件 2 passed |
+| E2E case 状态更新 JSON 校验 | `python3 -m json.tool feature_list.json >/tmp/web2audio_feature_list.json && echo ok` | 通过 | `feature_list.json` 结构合法 |
+| E2E case 状态更新差异格式检查 | `git diff --check` | 通过 | 无尾随空格或补丁格式问题 |
 | Chrome 插件正文提取回归 | `node --test extension/tests/article_extractor.test.cjs` | 通过 | 2 个 node:test 用例通过 |
 | 网页正文到 DB 链路最终启动验证 | `./init.sh` | 通过 | 后端 37 个 pytest 用例通过，4 个默认跳过用例，插件 2 个 node:test 用例通过 |
 | 网页正文到 DB 链路 JSON 校验 | `python3 -m json.tool feature_list.json >/tmp/web2audio_feature_list.json && echo ok` | 通过 | `feature_list.json` 结构合法 |
 | 网页正文到 DB 链路差异格式检查 | `git diff --check` | 通过 | 无尾随空格或补丁格式问题 |
-| E2E 验收文档飞书同步 | `lark-cli docs +update --as user --doc 'https://bytedance.larkoffice.com/docx/OFG1dKwKWoaRUwxXJ83cbbuanRb' --command overwrite --doc-format markdown --content @docs/E2E_ACCEPTANCE_CASES.md --format json` | 通过 | revision_id 为 50 |
-| E2E 验收文档飞书读取验证 | `lark-cli docs +fetch --as user --doc 'https://bytedance.larkoffice.com/docx/OFG1dKwKWoaRUwxXJ83cbbuanRb' --doc-format markdown --scope keyword --keyword 'W2A-E2E-008|W2A-E2E-010|37 passed|W2A_RUN_REAL_FULL_CHAIN=1' ...` | 通过 | 008/010 已自动化通过、`37 passed`、`4 skipped` 和 live 命令可读取 |
+| W2A-E2E-008/010 飞书同步 | `lark-cli docs +update --as user --doc 'https://bytedance.larkoffice.com/docx/OFG1dKwKWoaRUwxXJ83cbbuanRb' --command overwrite --doc-format markdown --content @docs/E2E_ACCEPTANCE_CASES.md --format json` | 通过 | 历史 revision_id 50 |
+| W2A-E2E-008/010 飞书读取验证 | `lark-cli docs +fetch --as user --doc 'https://bytedance.larkoffice.com/docx/OFG1dKwKWoaRUwxXJ83cbbuanRb' --doc-format markdown --scope keyword --keyword 'W2A-E2E-008|W2A-E2E-010|37 passed|W2A_RUN_REAL_FULL_CHAIN=1' ...` | 通过 | 008/010 已自动化通过；当前最新读取验证见 revision_id 54 记录 |
 | TOS 相关定向回归 | `PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_tos_live_upload.py backend/tests/test_runtime_config.py backend/tests/test_audio_jobs.py` | 通过 | 9 个用例通过，1 个真实 TOS 上传用例默认跳过 |
 | TOS 上传自测最终启动验证 | `./init.sh` | 通过 | 后端 32 个 pytest 用例通过，2 个真实调试用例默认跳过，插件 2 个 node:test 用例通过 |
 | JSON 校验 | `python3 -m json.tool feature_list.json >/tmp/web2audio_feature_list.json && echo ok` | 通过 | `feature_list.json` 结构合法 |
@@ -382,7 +415,7 @@
 ## 风险与阻塞
 
 - love-song 8000 仍是旧进程，`POST /api/assets/tos` 返回 404；当前代码需重启或改用 8001 服务。
-- iOS 文案去音乐化依赖 love-song API/iOS 支持 `content_type=article_audio` 或等价展示语义。
+- iOS 文案去音乐化的接口语义已由 `W2A-E2E-012` 覆盖；真机或模拟器仍可抽查最终视觉渲染。
 - 当前 active 数据库已更新为 MySQL；目标环境切换时仍需在对应 MySQL 实例执行 schema 初始化或迁移。
 - 当前插件正文提取为启发式规则，复杂页面的正文质量仍需继续通过后续处理策略观察和补充。
 - 当前网页到 DB 自动化覆盖的是 Node 直接调用 extractor、后端 API 和正文处理链路，不覆盖真实 Chrome 点击、popup UI 权限或任意复杂网页的正文质量。
