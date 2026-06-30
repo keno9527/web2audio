@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-**最后更新：** 2026-06-29 19:43 CST
-**当前功能：** 网页正文提取到 DB 落库链路自测
-**阶段：** 已新增网页提取 payload 经 `POST /api/articles` 和正文处理写入 MySQL 主表、分段表的自动化；`W2A-E2E-001` 到 `W2A-E2E-007` 默认自动化通过；`W2A-E2E-008` 和 `W2A-E2E-010` 在 E2E 文档中保留显式 live 自动化通过记录但默认跳过；最新 `./init.sh` 后端 37 passed、4 skipped，插件 2 passed；iOS 仍待人工验收
+**最后更新：** 2026-06-29 21:10 CST
+**当前功能：** W2A-E2E-011/012/013 改为 iOS 接口自动化
+**阶段：** 已把 iOS 人工端测试改为通过 love-song iOS 对应 HTTP 接口（歌单详情、播放会话、播放 URL、播放历史、会话切换）做接口自动化；显式开启 `W2A_RUN_REAL_FULL_CHAIN=1` 后真实 Doubao + TOS + love-song HTTP 全链路下 011/012/013 各 1 passed；默认 `./init.sh` 后端 37 passed、7 skipped，插件 2 passed；真机播放体验仍可人工抽查
 
 ## 已完成
 
@@ -123,6 +123,15 @@
 - 已更新 `docs/E2E_ACCEPTANCE_CASES.md`：`W2A-E2E-008` 和 `W2A-E2E-010` 从待确认改为已自动化通过；`W2A-E2E-011` 保持 iOS 侧待人工验证。
 - 已在 `backend/conf/README.md` 记录 `love_song.local.json` 格式，以及 `W2A_RUN_REAL_AUDIO_JOB=1`、`W2A_RUN_REAL_FULL_CHAIN=1` 两个 live E2E 复跑命令。
 - 已将 `feature_list.json` 中 `feat-010` 更新为 `in-progress`，证据记录后端真实依赖 live 已通过、iOS 仍待人工验收。
+- 已把 `W2A-E2E-011` 到 `W2A-E2E-013` 从 iOS 人工端测试改为通过 love-song iOS 对应 HTTP 接口做接口自动化：
+  - 在 `backend/tests/test_live_e2e_external_chain.py` 抽出 `run_full_chain_to_playable` 复用真实 Doubao + TOS + love-song HTTP 全链路，并新增 `love_song_get_playlist`、`love_song_post`、`love_song_patch` 调用 iOS 对应接口。
+  - `W2A-E2E-011`：歌单详情含文章 track，`POST /api/playback-sessions` 定位该 track 和 asset，`POST /api/playback-url` 返回 `source_type=tos`、`mime_type=audio/mpeg`，`url` 等于文章 `audio_storage_key`。
+  - `W2A-E2E-012`：歌单详情 track `content_type=article_audio`、`title=文章标题`、`subtitle=site_name`、`artist=null`、`album=null`、`duration_seconds` 与 web2audio 一致。
+  - `W2A-E2E-013`：两篇文章 position 连续，播放会话 `ordered_track_ids` 顺序一致，逐首 `playback-url` 返回各自音频 URL，`PATCH /api/playback-sessions/{id}` 切到第二篇后 `current_asset_id` 匹配，`POST /api/play-history` 写入两条 article track。
+  - 三个用例由 `W2A_RUN_REAL_FULL_CHAIN=1` 显式开启，默认 `./init.sh` 跳过。
+- 已在 8001 启动 love-song 当前代码服务并实跑三个 live 用例，`3 passed`。
+- 已更新 `docs/E2E_ACCEPTANCE_CASES.md`：`W2A-E2E-011`、`W2A-E2E-012`、`W2A-E2E-013` 矩阵分类改为接口自动化、跟进状态改为已自动化通过；关键 case 明细重写为 iOS 接口操作路径与断言；已自动化通过表、待确认表、冒烟/回归集状态、剩余风险和第 1、2 章环境说明同步更新。
+- 已将 `feature_list.json` 中 `feat-010` 证据更新为 iOS 接口自动化通过记录。
 
 ## 正在处理
 
@@ -130,7 +139,7 @@
 
 ## 下一步
 
-1. 做 love-song iOS 播放与展示人工验收，覆盖 `W2A-E2E-011` 到 `W2A-E2E-013`。
+1. 如需真机或模拟器体验抽查，覆盖 `W2A-E2E-011` 到 `W2A-E2E-013` 的实际播放流畅度和文案渲染。
 2. 如需要重新确认外部依赖漂移，再显式开启 `W2A_RUN_REAL_AUDIO_JOB=1` 或 `W2A_RUN_REAL_FULL_CHAIN=1` 复跑 live 自动化。
 3. 如目标是其它远端 MySQL，需要替换 `backend/conf/db.local.json` 或 `DATABASE_URL` 后执行 schema 初始化或迁移；当前更新的是 active MySQL profile。
 
@@ -231,6 +240,9 @@
 
 ## 验证记录
 
+- W2A-E2E-011/012/013 默认跳过验证：`PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_live_e2e_external_chain.py`，通过；5 个 live 用例默认跳过。
+- W2A-E2E-011/012/013 live 验证：在 8001 启动 love-song 当前代码服务后，`W2A_RUN_REAL_FULL_CHAIN=1 PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p no:cacheprovider backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_011_ios_today_reading_playable_via_love_song_api backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_012_ios_article_semantics_via_love_song_api backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_013_ios_sequential_playback_and_history_via_love_song_api -s`，通过；3 passed，真实 Doubao + TOS + love-song HTTP 全链路下经 iOS 对应接口验证歌单展示、播放 URL、文章语义、顺序连播和播放历史。
+- iOS 接口自动化最终启动验证：`./init.sh`，通过；后端 37 passed、7 skipped，插件 2 passed。
 - 启动基线：`./init.sh`，通过；后端 23 个 pytest 用例和插件 2 个 node:test 用例通过。
 - 配置构建诊断：`PYTHONPATH=backend python3 - <<'PY' ... build_tts_client/build_audio_storage/build_love_song_client ... PY`，结果为 Doubao client 和 TOS storage 可构建，love-song HTTP 因缺少 `backend/conf/love_song.local.json` 快速失败。
 - 当前 conf 最小真实分支：`PYTHONPATH=backend PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY' ... real Doubao + real TOS + fake love-song ... PY`，提交和正文处理成功，音频阶段失败为 `tts_generation_failed`，错误详情为 Doubao `/api/v3/audio/speech` 404，最终文章状态 `failed`。

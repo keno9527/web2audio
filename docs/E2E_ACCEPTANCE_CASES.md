@@ -2,7 +2,7 @@
 
 本文档按 `e2e-test-design` skill 重新整理 web2audio 第一版端到端验收 case。文档只保留影响验收执行的目标、环境、配置、case 矩阵、关键明细、自动化进度、待确认事项和剩余风险。
 
-状态更新时间：2026-06-29 19:43 CST。
+状态更新时间：2026-06-29 21:10 CST。
 
 ## 1. 验收目标和链路摘要
 
@@ -14,8 +14,8 @@
 
 | 层级 | 完成口径 | 当前状态 |
 | --- | --- | --- |
-| 本仓库 mock 闭环 | API 提交文章后，经正文处理、fake TTS、fake TOS、fake love-song，同步到 `playable` | 已自动化通过；最新 `./init.sh` 后端 37 passed、4 skipped，插件 2 passed |
-| 真实跨工程闭环 | Chrome 插件真实提交，真实豆包/TOS 生成音频，真实 love-song 后端登记资源，iOS「今日待读」连续播放 | 真实 Doubao + TOS audio job 已自动化通过；真实 Doubao + TOS + love-song HTTP 到 `playable` 已自动化通过；iOS 未验收 |
+| 本仓库 mock 闭环 | API 提交文章后，经正文处理、fake TTS、fake TOS、fake love-song，同步到 `playable` | 已自动化通过；最新 `./init.sh` 后端 37 passed、7 skipped，插件 2 passed |
+| 真实跨工程闭环 | Chrome 插件真实提交，真实豆包/TOS 生成音频，真实 love-song 后端登记资源，iOS「今日待读」连续播放 | 真实 Doubao + TOS audio job 已自动化通过；真实 Doubao + TOS + love-song HTTP 到 `playable` 已自动化通过；iOS「今日待读」展示、播放 URL、顺序和历史已通过 iOS 对应接口自动化验证；真机播放体验仍可人工抽查 |
 
 ### 链路摘要
 
@@ -59,17 +59,20 @@ flowchart LR
 | 测试数据隔离 | 建议使用测试 owner、测试 playlist 或测试标签；TOS object prefix 使用 `e2e/web2audio/{run_id}/` |
 | 清理策略 | 记录 article_id、TOS object key、track_id、asset_id、playlist item；live 自动化按测试 owner 清理 web2audio 数据，默认删除 TOS object 和 love-song playlist item |
 | 不进入默认验证 | 线上 case 不应进入 `./init.sh`，避免密钥、成本和外部服务抖动影响本地启动 |
-| 当前联调状态 | `doubao.local.json` 可构建真实 Doubao WebSocket client；`tos.local.json` 可写入并校验真实 TOS object；`love_song.local.json` 指向本地 love-song 当前代码服务 `http://127.0.0.1:8001`；W2A-E2E-008 和 W2A-E2E-010 已显式开启 live 自动化通过 |
+| 当前联调状态 | `doubao.local.json` 可构建真实 Doubao WebSocket client；`tos.local.json` 可写入并校验真实 TOS object；`love_song.local.json` 指向本地 love-song 当前代码服务 `http://127.0.0.1:8001`；W2A-E2E-008、W2A-E2E-010、W2A-E2E-011、W2A-E2E-012 和 W2A-E2E-013 已显式开启 live 自动化通过 |
 
-### iOS 人工验收环境
+### iOS 接口自动化与体验抽查环境
+
+W2A-E2E-011 到 W2A-E2E-013 不驱动真机 app，而是直接调用 love-song iOS 播放器使用的同一组 HTTP 接口（歌单详情、播放会话、播放 URL、播放历史、会话切换）做自动化断言。真机或模拟器播放体验作为可选体验层抽查。
 
 | 项目 | 准备方式 |
 | --- | --- |
-| 入口 | Chrome unpacked extension、web2audio 后端、love-song 后端、love-song iOS |
-| 环境要求 | Chrome 插件和 love-song iOS 指向同一套后端环境 |
+| 入口 | web2audio 后端、love-song 后端 `http://127.0.0.1:8001`；通过 love-song iOS 对应 HTTP 接口断言 |
+| 环境要求 | web2audio 真实 `TTS_MODE=doubao`、`STORAGE_MODE=tos`、`LOVE_SONG_MODE=http`；love-song 当前代码服务运行在 8001 |
+| iOS 接口范围 | `GET /api/playlists/{playlist_id}`、`POST /api/playback-sessions`、`PATCH /api/playback-sessions/{session_id}`、`POST /api/playback-url`、`POST /api/play-history` |
 | 账号和资源归属 | 个人 MVP 默认用户；真实多用户归属待后续设计 |
-| 验收证据 | 插件提交截图、web2audio article 详情、love-song 歌单截图、播放页截图、必要的 track_id 和 article_id |
-| 清理策略 | 测试文章、TOS object、love-song track/asset/playlist item 需要可枚举和可清理 |
+| 验收证据 | live 测试通过记录、web2audio article 详情、love-song 歌单与播放接口返回、必要的 track_id 和 article_id |
+| 清理策略 | 测试文章按 owner 清理；TOS object 默认删除（`W2A_E2E_KEEP_OBJECTS=1` 保留）；love-song playlist item 默认删除（`W2A_E2E_KEEP_LOVE_SONG_TRACK=1` 保留） |
 
 ## 3. E2E Case 矩阵
 
@@ -87,9 +90,9 @@ flowchart LR
 | W2A-E2E-008 | 真实 TTS/TOS/外部依赖 | 证明真实豆包和火山云 TOS 能生成可同步音频 | 半自动化 | 显式开启 `W2A_RUN_REAL_AUDIO_JOB=1` 后，真实 Doubao 合成、真实 TOS 上传和 object head 校验通过 | 已自动化通过 | P0 |
 | W2A-E2E-009 | love-song 后端/跨系统契约 | 证明真实 love-song 可登记 TOS 文章音频并追加「今日待读」 | 半自动化 | love-song 8001 资产登记和歌单追加返回 201；web2audio fake TTS/storage + 真实 love-song HTTP 分支到 `playable` | 已人工通过 | P0 |
 | W2A-E2E-010 | 真实后端/主路径/跨系统 | 证明三类真实依赖下 web2audio 能推进到 `playable` | 半自动化 | 显式开启 `W2A_RUN_REAL_FULL_CHAIN=1` 后，同一篇文章到达 `playable`，love-song 歌单回读为 `article_audio` | 已自动化通过 | P0 |
-| W2A-E2E-011 | iOS 播放/主路径/人工 | 证明 Chrome 提交后 iOS「今日待读」可看到并播放文章 | 人工 | 插件结果明确；iOS 歌单出现文章；播放页可播放 | 待人工验证 | P0 |
-| W2A-E2E-012 | iOS 展示/内容语义/人工 | 证明文章音频不被误展示为普通歌曲 | 人工 | love-song 后端已返回 `content_type=article_audio` 和 `subtitle`；iOS 展示仍待真机或模拟器验证 | 待人工验证 | P0 |
-| W2A-E2E-013 | iOS 播放/顺序和历史/人工 | 证明多篇文章按追加顺序连续播放并记录历史 | 人工 | 歌单顺序稳定；下一首符合追加顺序；播放历史记录 article track | 待人工验证 | P1 |
+| W2A-E2E-011 | iOS 播放/主路径/接口 | 证明 Chrome 提交后文章可经 iOS 对应接口在「今日待读」查到并取得可播放 URL | 半自动化 | 显式开启 `W2A_RUN_REAL_FULL_CHAIN=1` 后，文章 track 在歌单详情可查；播放会话定位该 track；`POST /api/playback-url` 返回 `source_type=tos` 的 TOS 音频 URL | 已自动化通过 | P0 |
+| W2A-E2E-012 | iOS 展示/内容语义/接口 | 证明文章音频不被误展示为普通歌曲 | 半自动化 | 显式开启 `W2A_RUN_REAL_FULL_CHAIN=1` 后，歌单详情 track `content_type=article_audio`、`title=文章标题`、`subtitle=site_name`、`artist=null`、`album=null` | 已自动化通过 | P0 |
+| W2A-E2E-013 | iOS 播放/顺序和历史/接口 | 证明多篇文章按追加顺序连续播放并记录历史 | 半自动化 | 显式开启 `W2A_RUN_REAL_FULL_CHAIN=1` 后，两篇文章追加 position 连续；播放会话 ordered_track_ids 顺序一致；切换下一首回读对应 asset；`POST /api/play-history` 记录两条 article track | 已自动化通过 | P1 |
 | W2A-E2E-014 | 线上清理/成本安全 | 证明线上联调数据可枚举、可清理、成本可控 | 半自动化 | 测试数据可列出；清理不影响真实数据；调用次数可统计 | 待确认 | P1 |
 
 ## 4. 关键 Case 明细
@@ -286,45 +289,96 @@ flowchart LR
 - 优先级：P0。
 - 风险说明：该 case 证明真实后端链路到 `playable`，但不替代 W2A-E2E-011 到 W2A-E2E-013 的 iOS 人工验收。
 
-### W2A-E2E-011：Chrome 提交后 iOS「今日待读」可播放
+### W2A-E2E-011：Chrome 提交后文章经 iOS 接口在「今日待读」可播放
 
-- 验收目标：证明用户从 Chrome 保存文章后，最终能在 love-song iOS「今日待读」看到并播放文章。
-- Case 分类：iOS 播放 / 主路径 / 人工验收。
-- 环境准备方式：Chrome 加载 unpacked extension；web2audio、love-song 后端、love-song iOS 指向同一环境。
-- 配置项：Chrome 插件 API 地址和 token；web2audio 真实 TTS/TOS/love-song 配置；love-song iOS 环境配置。
-- 账号和权限：个人 MVP 默认用户；后续多用户归属待确认。
-- 测试数据：普通公开文章，正文长度可控，带标题和来源站点。
-- 操作路径：打开文章；点击插件提交；等待 web2audio `playable`；打开 iOS「今日待读」；播放文章音频。
-- 预期结果：iOS 歌单出现文章，播放页能播放，播放控制复用 love-song 既有能力。
+- 验收目标：证明文章经真实链路到达 `playable` 后，能通过 love-song iOS 播放器使用的 HTTP 接口在「今日待读」查到该文章并取得可播放音频 URL。
+- Case 分类：iOS 播放 / 主路径 / 接口自动化。
+- 环境准备方式：web2audio 本地 MySQL profile；真实 `TTS_MODE=doubao`、`STORAGE_MODE=tos`、`LOVE_SONG_MODE=http`；love-song 当前代码服务运行在 `http://127.0.0.1:8001`；固定 playlist_id `demo_playlist_focus`。
+- 配置项：`backend/conf/doubao.local.json`、`backend/conf/tos.local.json`、`backend/conf/love_song.local.json`。
+- 账号和权限：豆包 API key、TOS AK/SK、love-song 资源登记、歌单和播放接口权限；个人 MVP 默认用户。
+- 测试数据：短中文文章正文，独立 `owner_user_id` 和唯一 `source_url`。
+- 操作路径：提交文章；执行正文处理、真实 audio job、`process_player_sync`；调用 love-song iOS 接口 `GET /api/playlists/{playlist_id}`、`POST /api/playback-sessions`、`POST /api/playback-url`。
+- 预期结果：文章 track 在「今日待读」歌单详情可查；播放会话能以该 track 起播；播放 URL 指向文章音频 TOS object。
 - 断言点：
-  - 用户可见：插件提交结果明确；iOS 歌单显示文章；播放页可播放。
-  - API：web2audio article 详情为 `playable`。
-  - 数据：web2audio 有 love_song IDs；love-song 有对应 track/asset/playlist item。
-  - 任务/文件/外部系统：TOS object 存在；love-song 播放 URL 可用。
+  - 用户可见：不驱动真机 UI，改由 iOS 客户端调用的同一组 HTTP 接口断言。
+  - API：`GET /api/playlists/{playlist_id}` 返回的 tracks 含该 track 且 `title` 匹配；`POST /api/playback-sessions` 的 `current_track_id`、`current_asset_id` 命中该文章，`ordered_track_ids` 含该 track；`POST /api/playback-url` 返回 `source_type=tos`、`mime_type=audio/mpeg`，`url` 等于文章 `audio_storage_key`。
+  - 数据：web2audio 写入 love_song IDs；love-song 有对应 track/asset/playlist item。
+  - 任务/文件/外部系统：真实 TOS object 存在；love-song 播放 URL 可用。
   - 日志/审计：article_id、track_id、asset_id 可串联排障。
-- 验收证据：插件截图、article 详情、iOS 歌单截图、播放页截图、关键业务 ID。
-- 执行方式：人工。
-- 跟进状态：待人工验证。
-- 自动化入口：暂不设计；后续可评估设备自动化。
-- 待确认事项：Chrome 真实点击、iOS「今日待读」播放和文章语义仍需真机或模拟器验收。
+- 验收证据：`W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_011_ios_today_reading_playable_via_love_song_api -s` 通过。
+- 执行方式：半自动化。
+- 跟进状态：已自动化通过。
+- 自动化入口：显式开启 `W2A_RUN_REAL_FULL_CHAIN=1`；默认 `./init.sh` 中跳过。
+- 待确认事项：真机或模拟器上的实际播放体验（音画、缓冲、锁屏）仍可单独做人工冒烟，不在该接口 case 范围内。
 - 优先级：P0。
-- 风险说明：这是第一版真实端到端完成标准。
+- 风险说明：该 case 证明 iOS 接口层能承接并回放文章音频，但不替代真机播放体验验收。
+
+### W2A-E2E-012：文章音频经 iOS 接口展示为文章语义
+
+- 验收目标：证明文章音频通过 love-song iOS 接口返回的内容语义为文章，而非普通音乐，避免「未知艺术家」「首歌」等音乐化文案。
+- Case 分类：iOS 展示 / 内容语义 / 接口自动化。
+- 环境准备方式：同 W2A-E2E-011，真实 Doubao/TOS/love-song HTTP，固定 playlist_id。
+- 配置项：`backend/conf/doubao.local.json`、`backend/conf/tos.local.json`、`backend/conf/love_song.local.json`。
+- 账号和权限：豆包 API key、TOS AK/SK、love-song 接口权限。
+- 测试数据：短中文文章正文，带标题和来源站点。
+- 操作路径：提交文章并完成真实全链路到 `playable`；调用 `GET /api/playlists/{playlist_id}` 读取该文章 track。
+- 预期结果：歌单详情中该 track 展示文章语义字段，且无音乐化的艺术家或专辑信息。
+- 断言点：
+  - 用户可见：不驱动真机 UI，改由 iOS 客户端读取的歌单详情接口断言。
+  - API：歌单详情 track `content_type=article_audio`、`title=文章标题`、`subtitle=site_name`、`artist=null`、`album=null`、`duration_seconds` 与 web2audio 一致。
+  - 数据：love-song track 内容类型为文章音频。
+  - 任务/文件/外部系统：不依赖额外副作用。
+  - 日志/审计：article_id、track_id 可关联。
+- 验收证据：`W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_012_ios_article_semantics_via_love_song_api -s` 通过。
+- 执行方式：半自动化。
+- 跟进状态：已自动化通过。
+- 自动化入口：显式开启 `W2A_RUN_REAL_FULL_CHAIN=1`；默认 `./init.sh` 中跳过。
+- 待确认事项：iOS 客户端最终文案排版仍可做真机视觉走查；接口字段语义已由该 case 固化。
+- 优先级：P0。
+- 风险说明：该 case 保证接口层语义正确，真机文案渲染仍建议人工抽查。
+
+### W2A-E2E-013：多篇文章经 iOS 接口按顺序连续播放并记录历史
+
+- 验收目标：证明多篇文章音频按追加顺序进入「今日待读」，能经 iOS 接口连续切换播放并写入播放历史。
+- Case 分类：iOS 播放 / 顺序和历史 / 接口自动化。
+- 环境准备方式：同 W2A-E2E-011，真实 Doubao/TOS/love-song HTTP，固定 playlist_id。
+- 配置项：`backend/conf/doubao.local.json`、`backend/conf/tos.local.json`、`backend/conf/love_song.local.json`。
+- 账号和权限：豆包 API key、TOS AK/SK、love-song 接口权限。
+- 测试数据：两篇短中文文章，独立 `owner_user_id` 和唯一 `source_url`。
+- 操作路径：依次提交两篇文章并完成真实全链路；调用 `GET /api/playlists/{playlist_id}`、`POST /api/playback-sessions`、`POST /api/playback-url`、`POST /api/play-history`、`PATCH /api/playback-sessions/{session_id}`。
+- 预期结果：两篇文章在歌单和会话顺序中相邻且第二篇紧随第一篇；逐首取得对应播放 URL；播放历史记录两条 article track。
+- 断言点：
+  - 用户可见：不驱动真机 UI，改由 iOS 客户端调用的播放接口断言。
+  - API：歌单详情中第二篇 position 等于第一篇 position 加一；播放会话 `ordered_track_ids` 中第二篇紧随第一篇；`POST /api/playback-url` 对两首分别返回对应文章音频 URL；`PATCH /api/playback-sessions/{session_id}` 切换到第二篇后 `current_asset_id` 匹配；`POST /api/play-history` 两次 `started` 事件分别记录两个 article track。
+  - 数据：两篇文章各自有独立 love_song track/asset。
+  - 任务/文件/外部系统：两个 TOS object 存在；love-song 歌单顺序稳定。
+  - 日志/审计：两个 article_id、track_id、asset_id 可分别串联。
+- 验收证据：`W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_013_ios_sequential_playback_and_history_via_love_song_api -s` 通过。
+- 执行方式：半自动化。
+- 跟进状态：已自动化通过。
+- 自动化入口：显式开启 `W2A_RUN_REAL_FULL_CHAIN=1`；默认 `./init.sh` 中跳过。
+- 待确认事项：随机播放、列表循环等其它播放模式仍复用 love-song 既有策略，不在该 case 范围内。
+- 优先级：P1。
+- 风险说明：该 case 证明顺序播放和历史记录接口可用，真机连播流畅度仍建议人工抽查。
 
 ## 5. 已自动化通过的 Case
 
-`W2A-E2E-001` 到 `W2A-E2E-007` 已随最新 `./init.sh` 自动化通过。`W2A-E2E-008` 和 `W2A-E2E-010` 已通过显式开启的 live 自动化；它们默认在 `./init.sh` 中跳过，不计入本地启动基线。
+`W2A-E2E-001` 到 `W2A-E2E-007` 已随最新 `./init.sh` 自动化通过。`W2A-E2E-008`、`W2A-E2E-010`、`W2A-E2E-011`、`W2A-E2E-012` 和 `W2A-E2E-013` 已通过显式开启的 live 自动化；它们默认在 `./init.sh` 中跳过，不计入本地启动基线。
 
 | Case ID | 场景名 | 自动化入口 | 最近通过时间或版本 |
 | --- | --- | --- | --- |
-| W2A-E2E-001 | 普通文章提交到可播放 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、4 skipped，插件 2 passed |
-| W2A-E2E-002 | 重复提交不重复建文章或追加歌单 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、4 skipped，插件 2 passed |
-| W2A-E2E-003 | 正文不可用时不生成音频 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、4 skipped，插件 2 passed |
-| W2A-E2E-004 | TTS 失败不产生可播放副作用 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、4 skipped，插件 2 passed |
-| W2A-E2E-005 | love-song 同步失败后可恢复 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、4 skipped，插件 2 passed |
-| W2A-E2E-006 | 运行时配置兼容回归 | `./init.sh`；`backend/tests/test_runtime_config.py` | 2026-06-29，后端 37 passed、4 skipped，插件 2 passed |
-| W2A-E2E-007 | 插件提取 payload 后写入正文数据库 | `./init.sh`；`node --test extension/tests/article_extractor.test.cjs`；`backend/tests/test_webpage_text_db_chain.py` | 2026-06-29，后端 37 passed、4 skipped，插件 2 passed |
+| W2A-E2E-001 | 普通文章提交到可播放 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-002 | 重复提交不重复建文章或追加歌单 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-003 | 正文不可用时不生成音频 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-004 | TTS 失败不产生可播放副作用 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-005 | love-song 同步失败后可恢复 | `./init.sh`；`backend/tests/test_fake_full_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-006 | 运行时配置兼容回归 | `./init.sh`；`backend/tests/test_runtime_config.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
+| W2A-E2E-007 | 插件提取 payload 后写入正文数据库 | `./init.sh`；`node --test extension/tests/article_extractor.test.cjs`；`backend/tests/test_webpage_text_db_chain.py` | 2026-06-29，后端 37 passed、7 skipped，插件 2 passed |
 | W2A-E2E-008 | 真实 Doubao TTS 与真实 TOS 音频产物 | `W2A_RUN_REAL_AUDIO_JOB=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_008_real_doubao_tts_and_tos_audio_job -s` | 2026-06-29，1 passed，真实 Doubao 合成、真实 TOS 上传和 object head 校验通过 |
 | W2A-E2E-010 | 真实 Doubao、TOS 和 love-song 完整后端链路 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_010_real_doubao_tos_and_love_song_full_chain -s` | 2026-06-29，1 passed，article 到 `playable`，love-song 歌单回读 `article_audio` |
+| W2A-E2E-011 | 文章经 iOS 接口在「今日待读」可播放 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_011_ios_today_reading_playable_via_love_song_api -s` | 2026-06-29，1 passed，歌单详情含文章 track，播放会话定位该 track，`playback-url` 返回 `source_type=tos` 文章音频 URL |
+| W2A-E2E-012 | 文章音频经 iOS 接口展示为文章语义 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_012_ios_article_semantics_via_love_song_api -s` | 2026-06-29，1 passed，歌单详情 track `content_type=article_audio`、`subtitle=site_name`、`artist=null`、`album=null` |
+| W2A-E2E-013 | 多篇文章经 iOS 接口顺序连播并记录历史 | `W2A_RUN_REAL_FULL_CHAIN=1 ... pytest backend/tests/test_live_e2e_external_chain.py::test_w2a_e2e_013_ios_sequential_playback_and_history_via_love_song_api -s` | 2026-06-29，1 passed，两篇文章 position 连续，会话顺序一致，逐首取得播放 URL 并写入两条播放历史 |
 
 ### 已人工通过的 Case
 
@@ -336,8 +390,7 @@ flowchart LR
 
 | Case ID | 待确认事项 | 影响 | 建议确认人或来源 |
 | --- | --- | --- | --- |
-| W2A-E2E-011 | Chrome、web2audio、love-song 后端、iOS 是否指向同一环境 | 阻塞真实用户路径验收 | web2audio 与 love-song iOS 负责人 |
-| W2A-E2E-012 | iOS 对 `content_type=article_audio` 和 `subtitle` 的实际展示规则 | 文章音频去音乐化仍缺真机或模拟器证据 | love-song iOS 负责人；`feat-007` |
+| W2A-E2E-011 到 W2A-E2E-013 | 接口层已自动化通过；真机或模拟器上的实际播放体验、文案渲染仍可单独做人工冒烟 | 接口契约已覆盖，剩余为体验层抽查 | love-song iOS 负责人；`feat-007` |
 | W2A-E2E-014 | 测试 owner、object prefix、测试 playlist 或 tag、清理方式 | 线上联调可能污染真实数据或产生不可控成本 | web2audio 运维/配置负责人 |
 
 ## 7. P0 冒烟集、P1 主干回归集、P2 边界回归集
@@ -353,8 +406,8 @@ flowchart LR
 | W2A-E2E-008 | 真实豆包/TOS 接入后 | 已自动化通过：显式 live |
 | W2A-E2E-009 | love-song 后端资源登记完成后 | 已人工通过：临时 8001 |
 | W2A-E2E-010 | 三类真实依赖联调前后 | 已自动化通过：显式 live |
-| W2A-E2E-011 | 第一版真实验收前 | 待人工验证 |
-| W2A-E2E-012 | iOS 文章展示语义完成后 | 待人工验证 |
+| W2A-E2E-011 | 第一版真实验收前 | 已自动化通过：显式 live |
+| W2A-E2E-012 | iOS 文章展示语义完成后 | 已自动化通过：显式 live |
 
 ### P1 主干回归集
 
@@ -363,7 +416,7 @@ flowchart LR
 | W2A-E2E-004 | 音频生成任务或 TTS/TOS client 改动后 | 已自动化通过 |
 | W2A-E2E-005 | love-song 同步 worker 或 client 改动后 | 已自动化通过 |
 | W2A-E2E-007 | Chrome 插件正文提取改动后 | 已自动化通过 |
-| W2A-E2E-013 | iOS 播放顺序、歌单或播放历史改动后 | 待人工验证 |
+| W2A-E2E-013 | iOS 播放顺序、歌单或播放历史改动后 | 已自动化通过：显式 live |
 | W2A-E2E-014 | 线上联调环境或清理策略变更后 | 待确认 |
 
 ### P2 边界回归集
@@ -375,9 +428,9 @@ flowchart LR
 | 风险 | 当前影响 | 建议下一步 |
 | --- | --- | --- |
 | MySQL 测试依赖当前 active profile | 默认自动化现在依赖 `backend/conf/db.local.json` 或 `DATABASE_URL` 指向可用 MySQL；目标环境切换时需要先确认连接和清理权限 | 保持测试 owner 隔离策略，切换 MySQL URL 后先跑 DB/session/runtime 目标回归 |
-| 真实后端已通过但 iOS 未验收 | W2A-E2E-010 已证明真实后端链路到 `playable`，但无法证明 iOS 歌单展示和播放体验 | 使用模拟器或真机执行 W2A-E2E-011 到 W2A-E2E-013 |
+| 真实后端已通过，iOS 接口层已自动化但真机体验未验收 | W2A-E2E-010 到 W2A-E2E-013 已证明真实后端链路到 `playable`，并经 iOS 对应接口验证歌单展示、播放 URL、顺序和历史；但接口断言不替代真机播放流畅度和文案渲染 | 需要时在模拟器或真机上做体验层冒烟 |
 | love-song 运行环境未固化 | 8001 当前代码已通过并已写入 `love_song.local.json`；8000 旧进程仍返回 404 | 重启 8000、下线旧进程，或在联调文档中固定 8001 |
-| iOS 文章语义未人工验收 | 后端已返回 `content_type=article_audio` 和 `subtitle`，但无法证明 iOS 不出现音乐化文案 | 使用模拟器或真机执行 W2A-E2E-012 |
+| iOS 文章语义接口已验证，真机文案渲染未抽查 | 歌单详情接口已固化 `content_type=article_audio`、`subtitle`、`artist=null`、`album=null`，W2A-E2E-012 已断言；真机上最终文案排版仍未走查 | 需要时在模拟器或真机上做文案视觉抽查 |
 | live 自动化默认跳过 | 真实 Doubao、真实 TOS 和真实 love-song 测试会产生外部调用、成本或远端对象，默认不进入 `./init.sh` | 需要真实联调时显式设置 `W2A_RUN_REAL_AUDIO_JOB=1` 或 `W2A_RUN_REAL_FULL_CHAIN=1` |
 | Chrome 插件未做真实点击到后端自动化 | 当前只验证正文提取，未验证浏览器权限、popup 配置和提交交互 | 后续可用 Playwright 或手工冒烟覆盖插件点击链路 |
 | 数据清理策略未完全落地 | live 自动化默认清理 web2audio 测试 owner、TOS object 和 love-song playlist item；love-song track/asset 本体清理仍缺固定入口 | 继续完善 W2A-E2E-014，定义测试资源标记和清理脚本 |

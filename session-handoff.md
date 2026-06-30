@@ -2,11 +2,19 @@
 
 ## 当前目标
 
-- 目标：测试网页到正文的获取，并验证正文主表和分段表的 DB 落库链路。
-- 当前状态：网页提取 payload 经 `POST /api/articles`、`process_article_text` 写入 MySQL `article_audio_items` 和 `article_tts_segments` 的自动化已通过；`W2A-E2E-001` 到 `W2A-E2E-007` 已进入默认自动化通过集；`W2A-E2E-008` 和 `W2A-E2E-010` 在 E2E 文档中保留显式 live 自动化通过记录但默认跳过；最新 `./init.sh` 通过，后端 37 passed、4 skipped，插件 2 passed。love-song iOS 播放和展示仍待人工验收。
+- 目标：把 `W2A-E2E-011` 到 `W2A-E2E-013` 从 iOS 人工端测试改为通过 love-song iOS 对应 HTTP 接口做接口自动化，并完成自动化测试。
+- 当前状态：三个 case 已改为半自动化，复用真实 Doubao + TOS + love-song HTTP 全链路，经 love-song iOS 对应接口（歌单详情、播放会话、播放 URL、播放历史、会话切换）断言；显式开启 `W2A_RUN_REAL_FULL_CHAIN=1` 后实跑 `3 passed`；默认 `./init.sh` 后端 37 passed、7 skipped，插件 2 passed。`docs/E2E_ACCEPTANCE_CASES.md`、`feature_list.json`、`progress.md` 已同步。真机播放体验仍可人工抽查。
 - 分支与提交：当前分支 `codex/feat-002-submit-entry` 基于 `f55c256 Localize project harness docs`，本次未提交。
 
 ## 本次已完成
+
+- 把 `W2A-E2E-011` 到 `W2A-E2E-013` 改为 iOS 接口自动化：
+  - 在 `backend/tests/test_live_e2e_external_chain.py` 抽出 `run_full_chain_to_playable` 复用真实 Doubao + TOS + love-song HTTP 全链路，并新增 `love_song_get_playlist`、`love_song_post`、`love_song_patch` 调用 iOS 对应接口。
+  - 新增 `test_w2a_e2e_011_ios_today_reading_playable_via_love_song_api`、`test_w2a_e2e_012_ios_article_semantics_via_love_song_api`、`test_w2a_e2e_013_ios_sequential_playback_and_history_via_love_song_api`，均由 `W2A_RUN_REAL_FULL_CHAIN=1` 显式开启，默认 `./init.sh` 跳过。
+  - 011 验证歌单详情含文章 track、播放会话定位、`playback-url` 返回 `source_type=tos` 文章音频 URL；012 验证 `content_type=article_audio`、`subtitle=site_name`、`artist=null`、`album=null`；013 验证两篇文章 position 连续、会话顺序一致、逐首播放 URL 与两条播放历史。
+  - 在 8001 启动 love-song 当前代码服务实跑三个 live 用例，`3 passed`。
+  - `docs/E2E_ACCEPTANCE_CASES.md`：矩阵、关键 case 明细、已自动化通过表、待确认表、冒烟/回归集状态、剩余风险和第 1、2 章环境说明同步更新。
+  - `feature_list.json` `feat-010` 证据、`progress.md` 同步更新。
 
 - 更新 `docs/PRODUCT.md`：
   - 产品文档只保留产品目标、系统边界、核心流程、功能范围、验收标准和待确认项。
@@ -380,22 +388,21 @@
 - 当前网页到 DB 自动化覆盖的是 Node 直接调用 extractor、后端 API 和正文处理链路，不覆盖真实 Chrome 点击、popup UI 权限或任意复杂网页的正文质量。
 - 当前本仓库 fake 自测链路已经到 `playable`，显式开启的真实 Doubao/TOS/love-song HTTP 后端链路也已经到 `playable`。
 - fake TTS、fake TOS 和 fake love-song client 只用于本仓库自测；真实后端验收以 `W2A_RUN_REAL_AUDIO_JOB=1` 和 `W2A_RUN_REAL_FULL_CHAIN=1` 的 live 自动化结果为准。
-- love-song iOS 文章音频展示语义仍未验收。
+- love-song iOS 文章音频展示语义已通过 iOS 对应接口（歌单详情、播放会话、播放 URL、播放历史）自动化验证（`W2A-E2E-011` 到 `W2A-E2E-013`）；真机或模拟器播放体验、文案渲染仍可人工抽查。
 - 豆包 TTS client 当前已按火山双向 WebSocket 协议真实生成音频，但真实时长仍按字符数估算；真实时长精确计算仍需后续 provider 元数据或音频探测。
-- `W2A-E2E-008` 和 `W2A-E2E-010` 的 live 自动化默认跳过；外部配置或远端服务变更后，需要显式开启环境变量复跑确认。
+- `W2A-E2E-008`、`W2A-E2E-010` 和 `W2A-E2E-011` 到 `W2A-E2E-013` 的 live 自动化默认跳过；外部配置或远端服务变更后，需要显式开启环境变量复跑确认。
 - 当前 `backend/conf/love_song.local.json` 已指向 `http://127.0.0.1:8001`；该文件属于本地忽略配置，不应提交密钥。
-- love-song 8000 仍是旧进程，`POST /api/assets/tos` 返回 404；需要重启或改用 8001 当前代码服务。
-- love-song iOS 文章音频展示语义仍需模拟器或真机验收。
+- love-song 8000 仍是旧进程，`POST /api/assets/tos` 返回 404；需要重启或改用 8001 当前代码服务。复跑 iOS 接口 live 用例前需先在 8001 启动 love-song 当前代码服务。
 
 ## 下一次启动
 
 1. 阅读 `AGENTS.md`。
 2. 阅读 `docs/PRODUCT.md`、`docs/TECHNICAL_DESIGN.md`、`feature_list.json`、`progress.md` 和本文件。
 3. 运行 `./init.sh`。
-4. 先做 love-song iOS 播放与展示人工验收；如怀疑外部配置漂移，再显式开启 `W2A_RUN_REAL_AUDIO_JOB=1` 或 `W2A_RUN_REAL_FULL_CHAIN=1` 复跑 live 自动化。
+4. 如需复跑 iOS 接口 live 自动化，先在 8001 启动 love-song 当前代码服务，再显式开启 `W2A_RUN_REAL_FULL_CHAIN=1` 跑 `W2A-E2E-011/012/013`；如怀疑外部配置漂移，也可显式开启 `W2A_RUN_REAL_AUDIO_JOB=1` 复跑 008。
 
 ## 建议下一步
 
-- 下一步优先做 love-song iOS 播放与展示人工验收，覆盖 `W2A-E2E-011` 到 `W2A-E2E-013`；外部依赖漂移时再显式复跑 live 自动化。
+- iOS 接口层 `W2A-E2E-011` 到 `W2A-E2E-013` 已自动化通过；下一步可选在真机或模拟器做体验层抽查（播放流畅度、文案渲染），或推进 `W2A-E2E-014` 线上清理与成本安全。
 
 <!-- harness-validator: Current Objective; Blockers; Files; Next Session; Recommended Next Step; Verification Evidence. -->
