@@ -1,0 +1,14 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "439f1b1f4ccc0ae627957754a21319fdd7d6e6cb",
+  "prompts": {},
+  "humans": {
+    "h_84260fe907a787": {
+      "author": "keno9527 <liuhaohust@gmail.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
