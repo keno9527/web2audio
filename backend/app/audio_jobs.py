@@ -6,46 +6,21 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.clients.storage import AudioStorage
+from app.clients.tts import TtsClient
 from app.main import (
     AUDIO_FAILED,
     AUDIO_PENDING,
     AUDIO_PROCESSING,
     AUDIO_READY,
+    AUDIO_STATUS_LABELS,
     TEXT_READY,
+    TEXT_STATUS_LABELS,
     ArticleAudioItem,
     ArticleTtsSegment,
     utc_now_naive,
 )
-
-
-@dataclass(frozen=True)
-class AudioSynthesisResult:
-    content: bytes
-    duration_seconds: int
-    mime_type: str = "audio/mpeg"
-
-
-class FakeTtsClient:
-    def __init__(self, duration_seconds_per_char: float = 0.2) -> None:
-        self.duration_seconds_per_char = duration_seconds_per_char
-        self.requests: list[str] = []
-
-    def synthesize(self, text: str, language: Optional[str] = None) -> AudioSynthesisResult:
-        self.requests.append(text)
-        duration = max(1, int(round(len(text) * self.duration_seconds_per_char)))
-        payload = f"FAKE-MP3[{language or 'unknown'}]:{text}".encode("utf-8")
-        return AudioSynthesisResult(content=payload, duration_seconds=duration)
-
-
-class FakeTosStorage:
-    def __init__(self) -> None:
-        self.objects: dict[str, bytes] = {}
-        self.content_types: dict[str, str] = {}
-
-    def put_object(self, key: str, content: bytes, content_type: str) -> str:
-        self.objects[key] = content
-        self.content_types[key] = content_type
-        return key
+from app.observability import log_pipeline_event
 
 
 @dataclass(frozen=True)
@@ -57,19 +32,26 @@ class AudioProcessingResult:
     storage_key: Optional[str] = None
     duration_seconds: Optional[int] = None
     error_code: Optional[str] = None
+    error_detail: Optional[str] = None
 
 
 def process_article_audio(
     session: Session,
     article_id: str,
     *,
-    tts_client: FakeTtsClient,
-    storage: FakeTosStorage,
+    tts_client: TtsClient,
+    storage: AudioStorage,
 ) -> AudioProcessingResult:
     article = session.scalar(
         select(ArticleAudioItem).where(ArticleAudioItem.article_id == article_id)
     )
     if article is None:
+        log_pipeline_event(
+            "audio_generation_failed",
+            "audio_generation",
+            article_id=article_id,
+            error_code="article_not_found",
+        )
         return AudioProcessingResult(
             generated=False,
             article_id=article_id,
@@ -81,6 +63,14 @@ def process_article_audio(
         article.audio_status = AUDIO_FAILED
         article.updated_at = utc_now_naive()
         session.commit()
+        log_pipeline_event(
+            "audio_generation_failed",
+            "audio_generation",
+            article_id=article.article_id,
+            error_code="text_not_ready",
+            text_status=TEXT_STATUS_LABELS[article.text_status],
+            audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        )
         return AudioProcessingResult(
             generated=False,
             article_id=article.article_id,
@@ -97,6 +87,14 @@ def process_article_audio(
         article.audio_status = AUDIO_FAILED
         article.updated_at = utc_now_naive()
         session.commit()
+        log_pipeline_event(
+            "audio_generation_failed",
+            "audio_generation",
+            article_id=article.article_id,
+            error_code="segments_missing",
+            text_status=TEXT_STATUS_LABELS[article.text_status],
+            audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        )
         return AudioProcessingResult(
             generated=False,
             article_id=article.article_id,
@@ -104,33 +102,19 @@ def process_article_audio(
             error_code="segments_missing",
         )
 
+    log_pipeline_event(
+        "audio_generation_started",
+        "audio_generation",
+        article_id=article.article_id,
+        text_status=TEXT_STATUS_LABELS[article.text_status],
+        audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        segment_count=len(segments),
+    )
     article.audio_status = AUDIO_PROCESSING
     article.updated_at = utc_now_naive()
     session.flush()
 
-    total_duration = 0
-    segment_payloads: list[bytes] = []
-    try:
-        for segment in segments:
-            segment.tts_status = AUDIO_PROCESSING
-            segment.updated_at = utc_now_naive()
-            session.flush()
-
-            synthesized = tts_client.synthesize(segment.text_content, language=article.language)
-            segment_key = (
-                f"web2audio/articles/{article.article_id}/segments/{segment.segment_id}.mp3"
-            )
-            segment.audio_storage_key = storage.put_object(
-                segment_key,
-                synthesized.content,
-                synthesized.mime_type,
-            )
-            segment.duration_seconds = synthesized.duration_seconds
-            segment.tts_status = AUDIO_READY
-            segment.updated_at = utc_now_naive()
-            total_duration += synthesized.duration_seconds
-            segment_payloads.append(synthesized.content)
-    except Exception:
+    def fail_audio(error_code: str, exc: Exception) -> AudioProcessingResult:
         article.audio_status = AUDIO_FAILED
         article.updated_at = utc_now_naive()
         for segment in segments:
@@ -138,21 +122,88 @@ def process_article_audio(
                 segment.tts_status = AUDIO_FAILED
                 segment.updated_at = utc_now_naive()
         session.commit()
+        log_pipeline_event(
+            "audio_generation_failed",
+            "audio_generation",
+            article_id=article.article_id,
+            error_code=error_code,
+            error_detail=str(exc),
+            audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        )
         return AudioProcessingResult(
             generated=False,
             article_id=article.article_id,
             audio_status=AUDIO_FAILED,
-            error_code="tts_generation_failed",
+            error_code=error_code,
+            error_detail=str(exc),
+        )
+
+    total_duration = 0
+    segment_payloads: list[bytes] = []
+    for segment in segments:
+        log_pipeline_event(
+            "audio_segment_started",
+            "audio_generation",
+            article_id=article.article_id,
+            segment_id=segment.segment_id,
+            segment_index=segment.segment_index,
+            text_char_count=segment.text_char_count,
+        )
+        segment.tts_status = AUDIO_PROCESSING
+        segment.updated_at = utc_now_naive()
+        session.flush()
+
+        try:
+            synthesized = tts_client.synthesize(segment.text_content, language=article.language)
+        except Exception as exc:
+            return fail_audio("tts_generation_failed", exc)
+
+        segment_key = f"web2audio/articles/{article.article_id}/segments/{segment.segment_id}.mp3"
+        try:
+            segment.audio_storage_key = storage.put_object(
+                segment_key,
+                synthesized.content,
+                synthesized.mime_type,
+            )
+        except Exception as exc:
+            return fail_audio("audio_storage_failed", exc)
+
+        segment.duration_seconds = synthesized.duration_seconds
+        segment.tts_status = AUDIO_READY
+        segment.updated_at = utc_now_naive()
+        total_duration += synthesized.duration_seconds
+        segment_payloads.append(synthesized.content)
+        log_pipeline_event(
+            "audio_segment_ready",
+            "audio_generation",
+            article_id=article.article_id,
+            segment_id=segment.segment_id,
+            segment_index=segment.segment_index,
+            storage_key=segment.audio_storage_key,
+            duration_seconds=segment.duration_seconds,
         )
 
     final_key = f"web2audio/articles/{article.article_id}/final.mp3"
     final_payload = b"\n".join(segment_payloads)
-    article.audio_storage_key = storage.put_object(final_key, final_payload, "audio/mpeg")
+    try:
+        article.audio_storage_key = storage.put_object(final_key, final_payload, "audio/mpeg")
+    except Exception as exc:
+        return fail_audio("audio_storage_failed", exc)
     article.duration_seconds = total_duration
     article.audio_status = AUDIO_READY
     article.audio_ready_at = utc_now_naive()
     article.updated_at = article.audio_ready_at
     session.commit()
+    log_pipeline_event(
+        "audio_generation_ready",
+        "audio_generation",
+        article_id=article.article_id,
+        audio_status=AUDIO_STATUS_LABELS[article.audio_status],
+        segment_count=len(segments),
+        storage_key=article.audio_storage_key,
+        duration_seconds=article.duration_seconds,
+        next_stage="player_sync",
+    )
 
     return AudioProcessingResult(
         generated=True,

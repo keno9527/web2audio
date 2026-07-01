@@ -9,18 +9,16 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.audio_jobs import (  # noqa: E402
-    FakeTosStorage,
-    FakeTtsClient,
-    process_article_audio,
-)
+from app.audio_jobs import process_article_audio  # noqa: E402
+from app.clients.fake import FakeTosStorage, FakeTtsClient  # noqa: E402
+from app.clients.tts import AudioSynthesisResult  # noqa: E402
 from app.main import (  # noqa: E402
+    AUDIO_FAILED,
     AUDIO_READY,
     PLAYER_PENDING,
     TEXT_READY,
     ArticleAudioItem,
     ArticleTtsSegment,
-    create_app,
 )
 from app.text_jobs import process_article_text  # noqa: E402
 
@@ -43,9 +41,20 @@ def article_payload() -> dict[str, str]:
     }
 
 
-def test_process_article_audio_generates_segment_and_final_tos_objects(tmp_path: Path) -> None:
-    db_url = f"sqlite:///{tmp_path / 'web2audio-test.db'}"
-    app = create_app(database_url=db_url, auth_token=TOKEN)
+class WorkingTtsClient:
+    def synthesize(self, text: str, language: str | None = None) -> AudioSynthesisResult:
+        return AudioSynthesisResult(content=b"audio", duration_seconds=1)
+
+
+class FailingStorage:
+    def put_object(self, key: str, content: bytes, content_type: str) -> str:
+        raise RuntimeError("bucket not found")
+
+
+def test_process_article_audio_generates_segment_and_final_tos_objects(
+    mysql_app_factory,
+) -> None:
+    app = mysql_app_factory(TOKEN)
     client = TestClient(app)
     created = client.post("/api/articles", json=article_payload(), headers=auth_headers())
     article_id = created.json()["article_id"]
@@ -80,9 +89,8 @@ def test_process_article_audio_generates_segment_and_final_tos_objects(tmp_path:
     assert tts_client.requests == [segment.text_content for segment in segments]
 
 
-def test_process_article_audio_marks_failed_when_text_is_not_ready(tmp_path: Path) -> None:
-    db_url = f"sqlite:///{tmp_path / 'web2audio-test.db'}"
-    app = create_app(database_url=db_url, auth_token=TOKEN)
+def test_process_article_audio_marks_failed_when_text_is_not_ready(mysql_app_factory) -> None:
+    app = mysql_app_factory(TOKEN)
     client = TestClient(app)
     created = client.post("/api/articles", json=article_payload(), headers=auth_headers())
     article_id = created.json()["article_id"]
@@ -102,3 +110,31 @@ def test_process_article_audio_marks_failed_when_text_is_not_ready(tmp_path: Pat
     assert result.error_code == "text_not_ready"
     assert article is not None
     assert article.audio_status != AUDIO_READY
+
+
+def test_process_article_audio_reports_storage_failure_separately_from_tts(
+    mysql_app_factory,
+) -> None:
+    app = mysql_app_factory(TOKEN)
+    client = TestClient(app)
+    created = client.post("/api/articles", json=article_payload(), headers=auth_headers())
+    article_id = created.json()["article_id"]
+
+    with app.state.session_factory() as session:
+        process_article_text(session, article_id)
+        result = process_article_audio(
+            session,
+            article_id,
+            tts_client=WorkingTtsClient(),
+            storage=FailingStorage(),
+        )
+        article = session.scalar(
+            select(ArticleAudioItem).where(ArticleAudioItem.article_id == article_id)
+        )
+
+    assert result.generated is False
+    assert result.audio_status == AUDIO_FAILED
+    assert result.error_code == "audio_storage_failed"
+    assert result.error_detail == "bucket not found"
+    assert article is not None
+    assert article.audio_status == AUDIO_FAILED

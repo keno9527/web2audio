@@ -1,0 +1,9 @@
+{
+  "active": "mysql",
+  "profiles": {
+    "mysql": {
+      "driver": "mysql",
+      "database_url": "mysql+pymysql://web2audio:web2audio@127.0.0.1:3306/web2audio?charset=utf8mb4"
+    }
+  }
+}

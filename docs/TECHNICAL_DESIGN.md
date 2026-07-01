@@ -11,7 +11,7 @@
 | 重复提交按原始网页 URL 精确去重 | `docs/PRODUCT.md` | 不做 canonical URL 或正文 hash 合并 |
 | 文章生成完成后追加到固定歌单「今日待读」末尾 | `docs/PRODUCT.md` | web2audio 不维护独立播放顺序 |
 | web2audio 与 love-song 通过 HTTP API 解耦 | 已确认产品边界 | web2audio 不直接写 love-song 数据库 |
-| 第一版 TTS 生成使用豆包 lite 模型 | 已确认实现约束 | 模型和音色作为服务配置，不进入业务表结构 |
+| 第一版 TTS 生成使用豆包语音合成 WebSocket | 火山「双向流式语音合成 WebSocket」协议 | `resource_id`、音色和服务凭据作为运行时配置，不进入业务表结构 |
 | 第一版音频对象存储使用火山云 TOS | 已确认实现约束 | web2audio 与 love-song 之间传递 TOS object key，不传云凭据 |
 | love-song 当前已有歌单、播放会话、播放 URL、播放历史接口 | `/Users/bytedance/Codebases/love-song/backend/app/api/routes/*.py` | 可复用播放链路 |
 | love-song 架构文档已有 TOS 音频资源登记草案，但当前路由未实现 | `/Users/bytedance/Codebases/love-song/docs/ARCHITECTURE.md`、`backend/app/api/routes/` | 需要补齐资源登记 API |
@@ -29,7 +29,7 @@
 ### 不包含
 
 - Chrome 插件 UI 设计和浏览器权限清单。
-- 豆包 lite 具体 SDK 封装和音频拼接算法。
+- 豆包语音合成 WebSocket 的协议细节和音频拼接算法。
 - 后台播放、锁屏控制、CarPlay 或系统媒体中心。
 - 多用户账号体系、权限管理后台和多租户隔离。
 - 真实代码、migration 或接口实现。
@@ -217,7 +217,7 @@ stateDiagram-v2
 | 失败阶段 | 处理行为 |
 | --- | --- |
 | 正文失败 | 标记 `text_status=failed`，日志记录正文处理任务上下文 |
-| TTS 失败 | 标记 `audio_status=failed`，日志记录豆包 lite 请求上下文和分段定位信息 |
+| TTS 失败 | 标记 `audio_status=failed`，日志记录豆包语音合成请求上下文和分段定位信息 |
 | love-song 同步失败 | 标记 `player_sync_status=failed`，日志记录资源登记或歌单追加请求上下文 |
 | 需要重跑 | 当前方案不定义公开重跑 API；由后端任务系统或运维动作按 `article_id` 重新投递 |
 
@@ -515,9 +515,10 @@ sequenceDiagram
 
 ### web2audio
 
-- 当前仓库尚无代码和 schema，新增表为首次建模，无存量迁移压力。
-- `feature_list.json` 中 `feat-002` 到 `feat-004` 需要按本方案拆分实施。
-- `init.sh` 后续需要补充后端测试、schema 校验、API 契约测试和插件构建检查。
+- 当前仓库已提供 SQLAlchemy schema 与 `ensure_database_schema()` 初始化入口；当前 active MySQL 已创建 `article_audio_items` 与 `article_tts_segments`，无存量迁移压力。
+- `feature_list.json` 已按工作流拆分功能，并记录 fake 自测、真实外部依赖和 iOS 验收边界。
+- `init.sh` 已覆盖后端测试和插件测试；数据库表、索引、CHECK 约束和外键行为由 `backend/tests/test_db_schema.py` 校验。
+- 生产数据库迁移仍需按目标部署环境单独执行，当前落库覆盖 `backend/conf/db.local.json` 的 active MySQL profile。
 
 ### love-song
 
@@ -571,7 +572,7 @@ sequenceDiagram
 
 | 问题 | 默认建议 | 影响 |
 | --- | --- | --- |
-| 豆包 lite 模型配置 | 通过运行时配置管理具体 model id、音色和服务凭据 | 影响 TTS client 配置、日志字段和外部依赖错误码 |
+| 豆包语音合成配置 | 通过运行时配置管理 WebSocket endpoint、`resource_id`、音色和服务凭据 | 影响 TTS client 配置、日志字段和外部依赖错误码 |
 | 正文保留策略 | 第一版保留清洗正文，后续支持删除 | 影响 `text_content` 是否可为空及清理任务 |
 | love-song 资源登记 API 最终路径 | 使用 `POST /api/assets/tos` 登记火山云 TOS object | 影响 web2audio love-song client |
 | 「今日待读」playlist_id 来源 | 优先配置固定 playlist ID | 避免按名称搜索产生歧义 |

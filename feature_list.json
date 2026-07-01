@@ -35,8 +35,8 @@
     },
     {
       "id": "feat-004",
-      "name": "豆包 lite TTS 与火山云 TOS 音频产物",
-      "description": "基于已清洗分段调用豆包 lite 生成分段音频，合成最终文章音频并上传火山云 TOS，回写 audio_storage_key、duration_seconds 和 audio_status。",
+      "name": "豆包 TTS 与火山云 TOS 音频产物",
+      "description": "基于已清洗分段调用豆包语音合成生成分段音频，合成最终文章音频并上传火山云 TOS，回写 audio_storage_key、duration_seconds 和 audio_status。",
       "dependencies": ["feat-003"],
       "status": "done",
       "evidence": "2026-06-27 10:50 CST 完成 fake 豆包 lite TTS client、fake 火山云 TOS storage 和 audio job；先运行新增测试确认 RED，再实现后运行 backend/tests 11 个 pytest 用例通过，插件 2 个 node:test 用例通过。",
@@ -60,8 +60,8 @@
       "name": "love-song TOS 资源登记 API",
       "description": "在 love-song 侧实现幂等的 POST /api/assets/tos，使用 external_source + external_id 创建或复用 track 与 audio asset，并返回稳定业务 ID。",
       "dependencies": ["feat-005"],
-      "status": "not-started",
-      "evidence": "",
+      "status": "in-progress",
+      "evidence": "2026-06-29 19:43 CST 已完成后端真实依赖 live 验证：W2A-E2E-008 通过真实 Doubao + TOS audio job，W2A-E2E-010 通过真实 Doubao + TOS + love-song HTTP 后端链路并到达 playable。2026-06-30 11:06 CST W2A-E2E-011 到 W2A-E2E-013 已改为 iOS 对应 HTTP 接口自动化并通过，真机播放体验只保留为可选抽查。",
       "workstream": "love-song-backend",
       "parallel_group": "wave-2-after-contract",
       "parallel_notes": "可与 feat-004、feat-007 并行；只依赖跨工程契约冻结，不阻塞 web2audio 先用 fake client 开发。"
@@ -71,8 +71,8 @@
       "name": "love-song iOS 文章音频展示语义",
       "description": "让 love-song API/iOS 识别 content_type=article_audio 和 subtitle，在「今日待读」与播放页展示文章标题、来源站点等语义，避免未知艺术家、首歌等音乐化文案。",
       "dependencies": ["feat-005"],
-      "status": "not-started",
-      "evidence": "",
+      "status": "done",
+      "evidence": "2026-06-30 11:06 CST 按当前验收口径，不做 iOS app 端测，改由 love-song iOS 对应 HTTP 接口验证文章语义；W2A-E2E-012 显式 live 通过，歌单详情返回 content_type=article_audio、subtitle=site_name、artist=null、album=null；W2A-E2E-011/013 同步覆盖可播放 URL、顺序和历史。",
       "workstream": "love-song-ios",
       "parallel_group": "wave-2-after-contract",
       "parallel_notes": "可与 feat-004、feat-006 并行；只需要稳定 DTO 语义，不要求 web2audio TTS 已完成。"
@@ -104,9 +104,8 @@
       "name": "端到端验收与风险收敛",
       "description": "稳定复现从 Chrome 提交文章到 web2audio 生成音频、登记 love-song 可播放资源、追加「今日待读」，再到 love-song iOS 播放器连续播放文章音频的闭环，并记录正文提取、TTS 成本、TOS 存储和跨系统同步风险。",
       "dependencies": ["feat-006", "feat-007", "feat-008"],
-      "status": "not-started",
-      "evidence": "",
-      "workstream": "end-to-end",
+      "status": "in-progress",
+      "evidence": "2026-06-30 11:06 CST 已把 W2A-E2E-011 到 W2A-E2E-013 从 iOS app 端测改为通过 love-song iOS 对应 HTTP 接口（歌单详情、播放会话、播放 URL、播放历史、会话切换）做自动化：backend/tests/test_live_e2e_external_chain.py 三个 live 用例显式开启 W2A_RUN_REAL_FULL_CHAIN=1 后真实 Doubao + TOS + love-song HTTP 全链路 live 批量 3 passed（011 歌单可查与可播放 URL、012 article_audio 文章语义、013 多篇顺序连播与播放历史），默认 ./init.sh 跳过（后端 37 passed、7 skipped，插件 2 passed）。真机播放体验仍可人工抽查；W2A-E2E-008 通过真实 Doubao + TOS audio job，W2A-E2E-010 通过真实 Doubao + TOS + love-song HTTP 后端链路到 playable。",
       "parallel_group": "final-integration",
       "parallel_notes": "不可并行提前完成；它依赖 web2audio、love-song 后端和 iOS 三条线都达到可联调状态。"
     }

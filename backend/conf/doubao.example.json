@@ -1,0 +1,13 @@
+{
+  "api_key": "",
+  "base_url": "wss://openspeech.bytedance.com/api/v3/tts/bidirection",
+  "resource_id": "seed-tts-2.0",
+  "speaker": "",
+  "audio_format": "mp3",
+  "sample_rate": 24000,
+  "bit_rate": 128000,
+  "speech_rate": 0,
+  "loudness_rate": 0,
+  "timeout": 60,
+  "estimated_seconds_per_char": 0.2
+}

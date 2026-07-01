@@ -7,7 +7,8 @@
 1. 打开 Chrome `chrome://extensions`。
 2. 开启 Developer mode。
 3. 选择 Load unpacked，目录选择仓库中的 `extension/`。
-4. 启动后端服务后，在插件弹窗中确认 API 地址和 token。
+4. 更新插件代码后，在扩展卡片上点击刷新图标重新加载插件。
+5. 启动后端服务后，在普通 `http` 或 `https` 文章页打开插件弹窗，确认 API 地址和 token。
 
 默认配置：
 
@@ -19,5 +20,10 @@
 从仓库根目录运行：
 
 ```bash
-node --test extension/tests/article_extractor.test.cjs
+node --test extension/tests/*.test.cjs
 ```
+
+## 常见提示
+
+- `chrome://`、Chrome Web Store、扩展管理页等浏览器内部页面不支持正文提取，需要切换到普通网页。
+- 如果当前网页在插件安装或重新加载前已经打开，插件会尝试自动注入正文提取脚本并重试提交。

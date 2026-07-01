@@ -1,5 +1,9 @@
 fastapi
 httpx
+pydantic-settings
+pymysql
 pytest
 sqlalchemy
+tos
 uvicorn
+websockets
